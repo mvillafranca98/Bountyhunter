@@ -1,0 +1,9 @@
+# Copy this to .dev.vars (never commit .dev.vars)
+# Used by `wrangler dev` for local secrets
+
+JWT_SECRET=your-random-32-char-secret-here
+ANTHROPIC_API_KEY=sk-ant-...
+PLAYWRIGHT_SERVICE_URL=http://localhost:3001
+PLAYWRIGHT_SERVICE_TOKEN=your-shared-secret
+JOB_SEARCH_API_URL=https://your-job-search-api.com
+JOB_SEARCH_API_KEY=your-key-here

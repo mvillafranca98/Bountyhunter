@@ -1,0 +1,29 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.env
+.env
+.env.local
+.env.production
+
+# Wrangler
+.wrangler/
+
+# Frontend build
+frontend/dist/
+
+# Playwright
+playwright-service/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/

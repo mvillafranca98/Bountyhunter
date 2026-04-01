@@ -1,0 +1,40 @@
+name = "bountyhunter-worker"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ─── D1 Database ───────────────────────────────────────────────────────────────
+# Run `npm run db:create` then paste the returned database_id below
+[[d1_databases]]
+binding = "DB"
+database_name = "bountyhunter-db"
+database_id = "PLACEHOLDER_REPLACE_AFTER_db:create"
+migrations_dir = "migrations"
+
+# ─── R2 Storage (resumes, cover letters, screenshots) ──────────────────────────
+# Run `npm run r2:create` first
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "bountyhunter-storage"
+# preview_bucket_name = "bountyhunter-storage-preview"  # optional local dev bucket
+
+# ─── Queues (async job pipeline) ───────────────────────────────────────────────
+# Run `npm run queue:create` first
+[[queues.producers]]
+binding = "JOB_QUEUE"
+queue = "bountyhunter-job-queue"
+
+[[queues.consumers]]
+queue = "bountyhunter-job-queue"
+max_batch_size = 5
+max_batch_timeout = 30
+
+# ─── Secrets (set via `wrangler secret put <NAME>`) ────────────────────────────
+# JWT_SECRET         — random 32+ char string
+# ANTHROPIC_API_KEY  — from console.anthropic.com
+# PLAYWRIGHT_SERVICE_URL — http://your-vps-ip:3001
+# PLAYWRIGHT_SERVICE_TOKEN — shared secret for playwright microservice
+
+[vars]
+ENVIRONMENT = "development"
+CORS_ORIGIN = "http://localhost:5173"
