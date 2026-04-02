@@ -37,4 +37,4 @@ max_batch_timeout = 30
 
 [vars]
 ENVIRONMENT = "development"
-CORS_ORIGIN = "http://localhost:5173"
+CORS_ORIGIN = "http://localhost:5175"
