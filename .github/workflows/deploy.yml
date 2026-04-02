@@ -71,8 +71,7 @@ jobs:
           VITE_API_URL: https://bountyhunter-worker.${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.workers.dev
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy frontend/dist --project-name=bountyhunter --branch=main
+        run: npx wrangler pages deploy dist --project-name=bountyhunter
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

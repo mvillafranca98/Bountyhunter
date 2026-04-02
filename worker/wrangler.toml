@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "bountyhunter-db"
-database_id = "PLACEHOLDER_REPLACE_AFTER_db:create"
+database_id = "3b419cea-734a-4bf7-9f55-f2d32f54c53d"
 migrations_dir = "migrations"
 
 # ─── R2 Storage (resumes, cover letters, screenshots) ──────────────────────────
