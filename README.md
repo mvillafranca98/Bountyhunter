@@ -1,4 +1,4 @@
-# BountyHunter 🎯
+# BountyHunter 
 **AI-powered job application copilot** — searches jobs, scores fit, tailors your resume, writes cover letters, and auto-fills applications.
 
 ---
@@ -126,7 +126,7 @@ PLAYWRIGHT_SERVICE_URL=http://localhost:3001
 PLAYWRIGHT_SERVICE_TOKEN=local-dev-token
 ```
 
-> ⚠️ `.dev.vars` is in `.gitignore` — it will never be committed.
+>  `.dev.vars` is in `.gitignore` — it will never be committed.
 
 ---
 
@@ -215,7 +215,7 @@ Go to **http://localhost:5173** in your browser.
 4. You'll see a toast: *"Searching for… results will appear shortly"*
 5. Go to **"Job Queue"** in the sidebar — jobs will appear with fit scores once processed
 
-> ⚠️ Note: The job search pipeline requires a `JOB_SEARCH_API_URL` secret to be configured (see [Connecting Job Sources](#connecting-job-sources) below). Without it, the queue worker logs a warning and skips. Job scoring via Claude works once jobs are in the DB.
+>  Note: The job search pipeline requires a `JOB_SEARCH_API_URL` secret to be configured (see [Connecting Job Sources](#connecting-job-sources) below). Without it, the queue worker logs a warning and skips. Job scoring via Claude works once jobs are in the DB.
 
 ---
 
