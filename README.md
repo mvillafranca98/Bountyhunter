@@ -1,5 +1,61 @@
-# BountyHunter 
+# BountyHunter 🎯
 **AI-powered job application copilot** — searches jobs, scores fit, tailors your resume, writes cover letters, and auto-fills applications.
+
+---
+
+## ⚡ Quickstart (local dev)
+
+> Full step-by-step instructions are in the [Setup section](#step-by-step-setup) below.
+
+```bash
+# 1. Clone
+git clone https://github.com/mvillafranca98/Bountyhunter.git
+cd Bountyhunter
+
+# 2. Install deps
+cd worker && npm install
+cd ../frontend && npm install
+
+# 3. Log in to Cloudflare (approve in browser immediately)
+npx wrangler login
+
+# 4. Create Cloudflare resources (one-time only)
+cd worker
+npm run db:create      # → copy the database_id into wrangler.toml
+npm run r2:create
+npm run queue:create
+
+# 5. Fill in your secrets
+#    Open worker/.dev.vars (hidden file — press Cmd+Shift+. in Finder to reveal it)
+#    JWT_SECRET     → any 32+ char random string: https://generate-secret.vercel.app/32
+#    ANTHROPIC_API_KEY → your sk-ant-... key from console.anthropic.com
+
+# 6. Run DB migrations locally
+npm run db:migrate:local
+
+# 7. Start dev servers (two separate terminals)
+npm run dev                        # terminal 1 — API on :8787
+cd ../frontend && npm run dev      # terminal 2 — App on :5173
+```
+
+Open **http://localhost:5173** — register, complete onboarding, upload your resume, and start hunting.
+
+---
+
+## 🚀 Deploy via GitHub Actions
+
+Every push to `main` auto-deploys the Worker + Frontend.
+
+**Add these secrets in GitHub → Settings → Secrets and variables → Actions:**
+
+| Secret | Where to get it |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → Create Token → "Edit Cloudflare Workers" |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages → right sidebar |
+| `JWT_SECRET` | Same value as your `.dev.vars` |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
+
+> ⚠️ Run `db:create`, `r2:create`, and `queue:create` once from your local machine first — GitHub Actions deploys code but cannot create Cloudflare infrastructure.
 
 ---
 
