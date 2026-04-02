@@ -1,0 +1,25 @@
+{
+  "name": "bountyhunter",
+  "version": "1.0.0",
+  "description": "**AI-powered job application copilot** — searches jobs, scores fit, tailors your resume, writes cover letters, and auto-fills applications.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently --names \"worker,frontend,playwright\" --prefix-colors \"cyan,magenta,yellow\" \"npm run dev --prefix worker\" \"npm run dev --prefix frontend\" \"npm run dev --prefix playwright-service\"",
+    "setup-linkedin": "npm run setup-linkedin --prefix playwright-service"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mvillafranca98/Bountyhunter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mvillafranca98/Bountyhunter/issues"
+  },
+  "homepage": "https://github.com/mvillafranca98/Bountyhunter#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

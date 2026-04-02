@@ -23,6 +23,7 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [data, setData] = useState(null)
   const [searching, setSearching] = useState(false)
+  const [seeding, setSeeding] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
@@ -42,6 +43,20 @@ export default function Dashboard() {
     }
   }
 
+  const seedJobs = async () => {
+    setSeeding(true)
+    try {
+      const { data: r } = await jobsApi.seed()
+      toast.success(r.message || 'Sample jobs loaded!')
+      // Reload dashboard stats
+      dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load sample jobs')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   const counts = data?.counts || {}
 
   return (
@@ -55,18 +70,39 @@ export default function Dashboard() {
       </div>
 
       {/* Quick search */}
-      <form onSubmit={triggerSearch} className="flex gap-3">
-        <input
-          type="text"
-          className="input flex-1"
-          placeholder="Search keywords (leave blank to use target roles)…"
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-        />
-        <button type="submit" disabled={searching} className="btn-primary px-6 whitespace-nowrap">
-          {searching ? 'Searching…' : 'Hunt jobs'}
+      <div className="space-y-2">
+        <form onSubmit={triggerSearch} className="flex gap-3">
+          <input
+            type="text"
+            className="input flex-1"
+            placeholder="Search keywords (leave blank to use target roles)…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          <button type="submit" disabled={searching} className="btn-primary px-6 whitespace-nowrap">
+            {searching ? 'Searching…' : 'Hunt jobs'}
+          </button>
+        </form>
+        <div className="flex items-center gap-2">
+          <div className="h-px flex-1 bg-surface-600" />
+          <span className="text-xs text-gray-600">or</span>
+          <div className="h-px flex-1 bg-surface-600" />
+        </div>
+        <button
+          onClick={seedJobs}
+          disabled={seeding}
+          className="w-full btn-ghost text-sm flex items-center justify-center gap-2"
+        >
+          {seeding ? (
+            <>
+              <span className="w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+              Claude is generating 5 sample jobs… (this takes ~30s)
+            </>
+          ) : (
+            '✨ Load 5 AI-scored sample jobs (based on your resume)'
+          )}
         </button>
-      </form>
+      </div>
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -53,10 +53,11 @@ export const resumeApi = {
 // ─── Jobs ──────────────────────────────────────────────────────────────────────
 export const jobsApi = {
   search: (data) => api.post('/jobs/search', data),
+  seed: () => api.post('/jobs/seed', {}, { timeout: 90000 }), // AI generates 5 jobs — allow 90s
   list: (params) => api.get('/jobs', { params }),
   counts: () => api.get('/jobs/counts'),
   get: (id) => api.get(`/jobs/${id}`),
-  prepare: (id) => api.post(`/jobs/${id}/prepare`),
+  prepare: (id) => api.post(`/jobs/${id}/prepare`, {}, { timeout: 90000 }),
   updateStatus: (id, status) => api.put(`/jobs/${id}/status`, { status }),
 }
 

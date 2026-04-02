@@ -2,6 +2,85 @@ import { useEffect, useState } from 'react'
 import { resumeApi } from '../../lib/api'
 import StepResume from '../onboarding/steps/StepResume'
 
+// ─── Minimal markdown renderer (no dependencies) ───────────────────────────────
+function renderInline(str) {
+  // Split on **bold**, *italic*, `code`
+  const parts = str.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**'))
+      return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>
+    if (part.startsWith('*') && part.endsWith('*'))
+      return <em key={i} className="italic text-gray-200">{part.slice(1, -1)}</em>
+    if (part.startsWith('`') && part.endsWith('`'))
+      return <code key={i} className="text-brand-light bg-surface-900 px-1 rounded text-xs font-mono">{part.slice(1, -1)}</code>
+    return part
+  })
+}
+
+function MarkdownResume({ text }) {
+  const lines = text.split('\n')
+  const elements = []
+  const listItems = []
+  let k = 0
+
+  const flush = () => {
+    if (listItems.length) {
+      elements.push(
+        <ul key={k++} className="list-none space-y-0.5 ml-3 my-1">
+          {listItems.splice(0).map((li, i) => (
+            <li key={i} className="text-sm text-gray-300 flex gap-2">
+              <span className="text-brand-light shrink-0 mt-0.5">•</span>
+              <span>{li}</span>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  }
+
+  for (const raw of lines) {
+    const line = raw.trimEnd()
+
+    if (line.startsWith('# ')) {
+      flush()
+      elements.push(
+        <h1 key={k++} className="text-2xl font-bold text-white mt-2 mb-0.5 tracking-tight">
+          {renderInline(line.slice(2))}
+        </h1>
+      )
+    } else if (line.startsWith('## ')) {
+      flush()
+      elements.push(
+        <h2 key={k++} className="text-sm font-bold text-brand-light uppercase tracking-widest mt-5 mb-1 border-b border-surface-600 pb-1">
+          {line.slice(3)}
+        </h2>
+      )
+    } else if (line.startsWith('### ')) {
+      flush()
+      elements.push(
+        <h3 key={k++} className="text-sm font-semibold text-white mt-3 mb-0.5">
+          {renderInline(line.slice(4))}
+        </h3>
+      )
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      listItems.push(renderInline(line.slice(2)))
+    } else if (line.trim() === '') {
+      flush()
+      elements.push(<div key={k++} className="h-1" />)
+    } else {
+      flush()
+      elements.push(
+        <p key={k++} className="text-sm text-gray-300 leading-relaxed">
+          {renderInline(line)}
+        </p>
+      )
+    }
+  }
+  flush()
+
+  return <div className="space-y-0">{elements}</div>
+}
+
 export default function ResumeStudio() {
   const [resume, setResume] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -28,7 +107,7 @@ export default function ResumeStudio() {
     )
   }
 
-  const linkedin = resume.linkedin_experience ? JSON.parse(resume.linkedin_experience) : null
+  const linkedin = resume.linkedin_experience || null
   const parsed = resume.parsed_data
 
   return (
@@ -72,9 +151,18 @@ export default function ResumeStudio() {
               Copy to clipboard
             </button>
           </div>
-          <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
-            {resume.master_resume_text || 'Master resume not yet generated — re-upload your resume.'}
-          </pre>
+          {resume.master_resume_text ? (
+            <div className="py-1">
+              <MarkdownResume text={resume.master_resume_text} />
+            </div>
+          ) : (
+            <div className="text-center py-8 space-y-2">
+              <p className="text-sm text-gray-400">Master resume not yet generated.</p>
+              <p className="text-xs text-gray-500">
+                Add your <code className="text-brand-light">ANTHROPIC_API_KEY</code> to <code className="text-brand-light">worker/.dev.vars</code>, restart the worker, then click <strong className="text-white">Replace resume</strong> to re-upload.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { requireAuth } from '../middleware/auth.js'
 import { generateId } from '../lib/crypto.js'
-import { scoreJobFit, tailorResume, generateCoverLetter } from '../lib/claude.js'
+import { scoreJobFit, tailorResume, generateCoverLetter, generateSampleJobs } from '../lib/claude.js'
 
 export const jobRoutes = new Hono()
 jobRoutes.use('*', requireAuth)
@@ -22,6 +22,10 @@ jobRoutes.post('/search', async (c) => {
   }
 
   // Enqueue search job
+  if (!c.env.JOB_QUEUE) {
+    return c.json({ error: 'Job queue not available — re-enable queue binding in wrangler.toml and restart the worker.' }, 503)
+  }
+
   await c.env.JOB_QUEUE.send({
     type: 'SEARCH_JOBS',
     userId,
@@ -31,6 +35,84 @@ jobRoutes.post('/search', async (c) => {
   })
 
   return c.json({ queued: true, message: `Searching for "${searchKeywords}" — results will appear shortly.` })
+})
+
+// POST /jobs/seed — generate 5 AI-scored sample jobs based on user's resume + target roles
+jobRoutes.post('/seed', async (c) => {
+  const userId = c.get('userId')
+
+  if (!c.env.ANTHROPIC_API_KEY || c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')) {
+    return c.json({ error: 'ANTHROPIC_API_KEY not set — add your key to worker/.dev.vars and restart the worker.' }, 503)
+  }
+
+  const resume = await c.env.DB.prepare(
+    'SELECT parsed_data FROM resumes WHERE user_id = ? AND is_active = 1 LIMIT 1'
+  ).bind(userId).first()
+
+  const { results: roleRows } = await c.env.DB.prepare(
+    'SELECT role_title FROM target_roles WHERE user_id = ? ORDER BY priority LIMIT 5'
+  ).bind(userId).all()
+
+  const salary = await c.env.DB.prepare(
+    'SELECT * FROM salary_preferences WHERE user_id = ? LIMIT 1'
+  ).bind(userId).first()
+
+  const user = await c.env.DB.prepare(
+    'SELECT location, employment_type FROM users WHERE id = ?'
+  ).bind(userId).first()
+
+  const parsedResume = resume?.parsed_data ? JSON.parse(resume.parsed_data) : {}
+  const targetRoles = roleRows.map(r => r.role_title)
+  const userPrefs = {
+    salary: salary ? `$${salary.min_yearly}–$${salary.max_yearly}/yr` : null,
+    location: user?.location || null,
+    employment_type: user?.employment_type || 'full-time',
+  }
+
+  let generated
+  try {
+    generated = await generateSampleJobs(c.env.ANTHROPIC_API_KEY, parsedResume, targetRoles, userPrefs)
+  } catch (e) {
+    return c.json({ error: `Sample job generation failed: ${e.message}` }, 500)
+  }
+
+  const jobs = generated?.jobs || []
+  if (!jobs.length) return c.json({ error: 'No jobs were generated — try again' }, 500)
+
+  const stmts = []
+  for (const job of jobs) {
+    const id = generateId()
+    const fitReasoning = {
+      score: job.fit_score,
+      verdict: job.fit_verdict,
+      highlights: job.fit_highlights || [],
+      gaps: job.fit_gaps || [],
+      reasoning: job.fit_reasoning || '',
+    }
+    const status = (job.fit_score || 0) >= 75 ? 'scored' : 'low_fit'
+    stmts.push(
+      c.env.DB.prepare(
+        `INSERT INTO jobs
+         (id, user_id, source, external_id, title, company, location, url, description, salary_min, salary_max, salary_type, fit_score, fit_reasoning, status)
+         VALUES (?, ?, 'demo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        id, userId, generateId(),
+        job.title, job.company,
+        job.location || '',
+        job.url || `https://jobs.example.com/${id}`,
+        job.description || '',
+        job.salary_min || null,
+        job.salary_max || null,
+        job.salary_type || 'yearly',
+        job.fit_score || null,
+        JSON.stringify(fitReasoning),
+        status
+      )
+    )
+  }
+
+  await c.env.DB.batch(stmts)
+  return c.json({ seeded: jobs.length, message: `${jobs.length} sample jobs generated and scored!` })
 })
 
 // GET /jobs — list user's jobs with optional status filter

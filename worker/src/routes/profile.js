@@ -51,10 +51,10 @@ profileRoutes.put('/', async (c) => {
        updated_at = datetime('now')
      WHERE id = ?`
   ).bind(
-    first_name, last_name, phone, location, linkedin_url,
-    work_authorization, start_date, employment_type,
+    first_name ?? null, last_name ?? null, phone ?? null, location ?? null, linkedin_url ?? null,
+    work_authorization ?? null, start_date ?? null, employment_type ?? null,
     auto_apply !== undefined ? (auto_apply ? 1 : 0) : null,
-    fit_threshold, onboarding_step, userId
+    fit_threshold ?? null, onboarding_step ?? null, userId
   ).run()
 
   return c.json({ success: true })
@@ -76,7 +76,7 @@ profileRoutes.put('/salary', async (c) => {
          preferred_type = COALESCE(?, preferred_type),
          currency = COALESCE(?, currency)
        WHERE user_id = ?`
-    ).bind(min_hourly, max_hourly, min_yearly, max_yearly, preferred_type, currency, userId).run()
+    ).bind(min_hourly ?? null, max_hourly ?? null, min_yearly ?? null, max_yearly ?? null, preferred_type ?? null, currency ?? null, userId).run()
   } else {
     await c.env.DB.prepare(
       `INSERT INTO salary_preferences (id, user_id, min_hourly, max_hourly, min_yearly, max_yearly, preferred_type, currency)

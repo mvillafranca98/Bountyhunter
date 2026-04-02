@@ -1,0 +1,66 @@
+# BountyHunter — System Requirements
+# ─────────────────────────────────────────────────────────────────────────────
+# This file lists every tool, account, and key you need before running the app.
+# See README.md for full setup instructions.
+
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+
+node      >=18.0.0   # https://nodejs.org  (v20 LTS recommended)
+npm       >=9.0.0    # included with Node.js
+wrangler  >=4.0.0    # npm install -g wrangler
+
+
+# ── Cloudflare (free tier works) ─────────────────────────────────────────────
+# Sign up at: https://dash.cloudflare.com
+#
+# Resources created with `npm run db:create / r2:create / queue:create`:
+#   D1 database     bountyhunter-db
+#   R2 bucket       bountyhunter-resumes
+#   Queue           bountyhunter-job-queue
+
+
+# ── API Keys (add to worker/.dev.vars) ───────────────────────────────────────
+
+ANTHROPIC_API_KEY     # required — https://console.anthropic.com
+                      # Used for: resume parsing, master resume generation,
+                      #           job fit scoring, cover letters, LinkedIn copy,
+                      #           sample job generation, question bank answers
+
+JWT_SECRET            # required — any random 32+ char string
+                      # Generate: https://generate-secret.vercel.app/32
+
+PLAYWRIGHT_SERVICE_URL    # optional (local dev default: http://localhost:3001)
+PLAYWRIGHT_SERVICE_TOKEN  # optional (local dev default: local-dev-token)
+
+JOB_SEARCH_API_URL    # optional — needed for live "Hunt jobs" feature
+JOB_SEARCH_API_KEY    # optional — e.g. RapidAPI JSearch key
+                      # Without these, use "✨ Load sample jobs" on the Dashboard
+
+
+# ── LinkedIn (for auto-apply only) ───────────────────────────────────────────
+# A LinkedIn account is required to use the Auto-apply feature.
+# No credentials are stored — authentication uses a saved browser session.
+# One-time setup: npm run setup-linkedin
+
+
+# ── Node.js packages (installed via npm install in each folder) ──────────────
+#
+# worker/              hono, @cloudflare/workers-types, wrangler
+# frontend/            react, react-dom, react-router-dom, axios, vite,
+#                      tailwindcss, pdfjs-dist, react-toastify
+# playwright-service/  express, playwright, dotenv, nodemon
+# root/                concurrently
+
+
+# ── Chromium browser (for Playwright) ────────────────────────────────────────
+# Installed once via:  cd playwright-service && npm run install-browsers
+# Size: ~150 MB
+# OS support: macOS, Linux, Windows
+
+
+# ── Optional — Production deployment ─────────────────────────────────────────
+# Cloudflare Pages    frontend deployment (free)
+# Cloudflare Workers  backend API deployment (free tier: 100k req/day)
+# VPS or Fly.io       playwright-service hosting (requires persistent filesystem)
+#   Recommended: DigitalOcean Droplet $6/mo, Hetzner CX22, or Fly.io shared-cpu-1x

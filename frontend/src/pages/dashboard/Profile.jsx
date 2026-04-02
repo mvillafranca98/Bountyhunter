@@ -112,7 +112,7 @@ export default function Profile() {
               onClick={() => setAutoApply(v => !v)}
               className={`relative w-10 h-5 rounded-full transition-colors ${autoApply ? 'bg-brand' : 'bg-surface-600'}`}
             >
-              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoApply ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoApply ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
             </button>
           </div>
           <div>

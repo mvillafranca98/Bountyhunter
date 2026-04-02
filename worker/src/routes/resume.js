@@ -34,11 +34,17 @@ resumeRoutes.post('/upload', async (c) => {
   const textToparse = resumeText || '(PDF uploaded — text extraction pending)'
 
   // Parse with Claude
+  const apiKeyValid = c.env.ANTHROPIC_API_KEY && !c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')
   let parsed = null
-  try {
-    parsed = await parseResume(c.env.ANTHROPIC_API_KEY, textToparse)
-  } catch (e) {
-    console.error('Resume parse error:', e.message)
+  if (apiKeyValid) {
+    try {
+      parsed = await parseResume(c.env.ANTHROPIC_API_KEY, textToparse)
+    } catch (e) {
+      console.error('Resume parse error:', e.message)
+      return c.json({ error: `Resume parsing failed: ${e.message}` }, 500)
+    }
+  } else {
+    return c.json({ error: 'ANTHROPIC_API_KEY not set — add your key to worker/.dev.vars and restart the worker.' }, 503)
   }
 
   // Fetch user profile for master resume generation
@@ -55,6 +61,7 @@ resumeRoutes.post('/upload', async (c) => {
       linkedInCopy = await generateLinkedInCopy(c.env.ANTHROPIC_API_KEY, parsed, masterResumeText)
     } catch (e) {
       console.error('Master resume gen error:', e.message)
+      return c.json({ error: `Master resume generation failed: ${e.message}` }, 500)
     }
   }
 

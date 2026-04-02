@@ -15,6 +15,7 @@ frontend/dist/
 
 # Playwright
 playwright-service/node_modules/
+playwright-service/.session/
 
 # OS
 .DS_Store

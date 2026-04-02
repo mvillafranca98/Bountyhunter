@@ -223,7 +223,7 @@ export default function JobQueue() {
                         </button>
                       )}
                       {selected.prepared && (
-                        <button onClick={() => autoApply(job)} disabled={applying} className="btn-primary text-xs">
+                        <button onClick={() => autoApply(selected)} disabled={applying} className="btn-primary text-xs">
                           {applying ? 'Queuing…' : 'Auto-apply'}
                         </button>
                       )}

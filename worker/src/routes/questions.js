@@ -31,6 +31,10 @@ questionRoutes.get('/', async (c) => {
 questionRoutes.post('/seed', async (c) => {
   const userId = c.get('userId')
 
+  if (!c.env.ANTHROPIC_API_KEY || c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')) {
+    return c.json({ error: 'ANTHROPIC_API_KEY not set — add your key to worker/.dev.vars and restart the worker.' }, 503)
+  }
+
   const user = await c.env.DB.prepare(
     'SELECT * FROM users WHERE id = ?'
   ).bind(userId).first()
@@ -124,6 +128,10 @@ questionRoutes.post('/generate', async (c) => {
   const { question, job_context = '' } = await c.req.json()
   if (!question) return c.json({ error: 'question is required' }, 400)
 
+  if (!c.env.ANTHROPIC_API_KEY || c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')) {
+    return c.json({ error: 'ANTHROPIC_API_KEY not set — add your key to worker/.dev.vars and restart the worker.' }, 503)
+  }
+
   const resume = await c.env.DB.prepare(
     'SELECT parsed_data FROM resumes WHERE user_id = ? AND is_active = 1 LIMIT 1'
   ).bind(userId).first()
@@ -134,9 +142,12 @@ questionRoutes.post('/generate', async (c) => {
     'SELECT work_authorization, start_date FROM users WHERE id = ?'
   ).bind(userId).first()
 
-  const answer = await answerScreeningQuestion(
-    c.env.ANTHROPIC_API_KEY, question, parsedResume, user, job_context
-  )
-
-  return c.json({ answer })
+  try {
+    const answer = await answerScreeningQuestion(
+      c.env.ANTHROPIC_API_KEY, question, parsedResume, user, job_context
+    )
+    return c.json({ answer })
+  } catch (e) {
+    return c.json({ error: `AI generation failed: ${e.message}` }, 500)
+  }
 })

@@ -3,6 +3,19 @@
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages'
 const MODEL = 'claude-sonnet-4-6'
 
+// Strip markdown code fences and attempt to recover truncated JSON
+function parseJSON(text) {
+  const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+  try {
+    return JSON.parse(stripped)
+  } catch {
+    // JSON was truncated — trim to last complete top-level closing brace
+    const lastBrace = stripped.lastIndexOf('}')
+    if (lastBrace === -1) throw new Error('No valid JSON object found in response')
+    return JSON.parse(stripped.slice(0, lastBrace + 1))
+  }
+}
+
 async function callClaude(apiKey, systemPrompt, userMessage, maxTokens = 2048) {
   const res = await fetch(CLAUDE_API, {
     method: 'POST',
@@ -55,27 +68,56 @@ Return ONLY valid JSON matching this schema (no markdown, no explanation):
   "years_of_experience": number
 }`
 
-  const result = await callClaude(apiKey, system, `Parse this resume:\n\n${resumeText}`)
-  return JSON.parse(result)
+  const result = await callClaude(apiKey, system, `Parse this resume:\n\n${resumeText}`, 4096)
+  return parseJSON(result)
 }
 
 // ─── Master Resume Generation ──────────────────────────────────────────────────
 export async function generateMasterResume(apiKey, parsedData, userProfile) {
-  const system = `You are an expert resume writer who creates ATS-optimized, compelling resumes.
-Your resumes are concise, achievement-focused, and use strong action verbs.
-Return the resume in clean markdown format.`
+  const system = `You are an expert resume writer who creates ATS-optimized resumes in Harvard Business School format.
+Your resumes are concise, achievement-focused, and use consistent Harvard-style markdown formatting.
+Return the resume in markdown format only — no preamble, no explanation.`
 
-  const prompt = `Create a polished, ATS-optimized master resume for this candidate.
+  const prompt = `Create a Harvard-style, ATS-optimized master resume for this candidate.
 
 Profile: ${JSON.stringify(userProfile, null, 2)}
 Parsed Resume Data: ${JSON.stringify(parsedData, null, 2)}
 
-Requirements:
-- Use strong action verbs (Led, Built, Reduced, Increased, Designed...)
-- Quantify achievements wherever possible
-- Keep to 1-2 pages worth of content
-- Format in clean markdown with sections: Summary, Experience, Skills, Education
-- Make it ATS-friendly (no tables, columns, or special characters)`
+HARVARD FORMAT RULES — follow exactly:
+
+1. HEADER (top of resume):
+   # First Last
+   email@example.com · (555) 555-5555 · City, State · linkedin.com/in/handle
+
+2. SECTIONS in this order (use ## for section headers):
+   ## Experience
+   ## Education
+   ## Skills
+   ## Certifications  ← only if present
+
+3. EXPERIENCE ENTRIES — each role formatted as:
+   **Company Name** — City, State (or Remote)
+   *Job Title* | Month Year – Month Year (or Present)
+   - Action verb + achievement with quantified impact (e.g., "Led team of 8 engineers to reduce...")
+   - 2–4 bullets per role, starting with strong action verbs
+   - Quantify impact with %, $, headcount, or time saved wherever possible
+
+4. EDUCATION ENTRIES:
+   **University Name** — City, State
+   *Degree, Major* | Graduation Year
+   - Relevant coursework, honors, GPA (only if ≥ 3.5), or activities (optional)
+
+5. SKILLS:
+   Comma-separated by category on separate lines, e.g.:
+   **Languages:** Python, JavaScript, SQL
+   **Frameworks:** React, Node.js, FastAPI
+   **Tools:** AWS, Docker, Kubernetes, Git
+
+STRICT RULES:
+- Use ONLY information from the provided parsed data — do NOT fabricate experience, dates, or companies
+- No tables, no columns, no special symbols (ATS-safe plain markdown only)
+- Keep total content to 1–2 pages equivalent
+- Dates must be consistent format throughout`
 
   return callClaude(apiKey, system, prompt, 3000)
 }
@@ -99,7 +141,7 @@ Make the About section tell a story. The headline should include role + value pr
 Experience bullets should be achievement-focused (not just responsibilities).`
 
   const result = await callClaude(apiKey, system, prompt, 2000)
-  return JSON.parse(result)
+  return parseJSON(result)
 }
 
 // ─── Job Fit Scoring ───────────────────────────────────────────────────────────
@@ -131,7 +173,7 @@ Candidate Preferences:
 Be honest. A 90+ score means the candidate is nearly perfect for this role.`
 
   const result = await callClaude(apiKey, system, prompt)
-  return JSON.parse(result)
+  return parseJSON(result)
 }
 
 // ─── Tailored Resume ───────────────────────────────────────────────────────────
@@ -206,6 +248,53 @@ and positions them positively for this role.`
   return callClaude(apiKey, system, prompt, 300)
 }
 
+// ─── Sample Job Generation (for demo / seed) ──────────────────────────────────
+export async function generateSampleJobs(apiKey, parsedResume, targetRoles, userPrefs) {
+  const system = `You are a job board that generates realistic job postings and evaluates candidate fit.
+Return ONLY valid JSON (no markdown wrapper):
+{
+  "jobs": [
+    {
+      "title": "string",
+      "company": "string (real well-known company name)",
+      "location": "string (e.g. San Francisco, CA or Remote)",
+      "url": "string (fake but plausible URL like https://careers.company.com/jobs/12345)",
+      "description": "string (200-280 words — realistic JD with responsibilities AND requirements)",
+      "salary_min": number,
+      "salary_max": number,
+      "salary_type": "yearly",
+      "fit_score": number (0-100, honest assessment),
+      "fit_verdict": "strong_fit | good_fit | possible_fit | weak_fit",
+      "fit_highlights": ["2-4 strings — why they match"],
+      "fit_gaps": ["1-3 strings — missing skills or experience"],
+      "fit_reasoning": "string (2 sentences explaining the score)"
+    }
+  ]
+}`
+
+  const roles = targetRoles.length ? targetRoles.join(', ') : 'software engineer'
+
+  const prompt = `Generate exactly 5 realistic job postings for a candidate targeting: ${roles}
+
+Candidate Background:
+${JSON.stringify(parsedResume, null, 2)}
+
+Preferences:
+- Salary range: ${userPrefs.salary || 'not specified'}
+- Location: ${userPrefs.location || 'flexible'}
+- Employment type: ${userPrefs.employment_type || 'full-time'}
+
+Requirements:
+- Mix of scores: 2 strong fits (80-95), 2 good fits (65-79), 1 possible/weak fit (40-64)
+- Use real company names (e.g., Google, Stripe, Airbnb, Meta, Shopify, Figma, OpenAI, Notion)
+- Make descriptions specific to the candidate's actual skills and background
+- Salary ranges should be realistic for 2025 US market
+- Fit scores must honestly reflect how well the candidate's resume matches the JD`
+
+  const result = await callClaude(apiKey, system, prompt, 4096)
+  return parseJSON(result)
+}
+
 // ─── Skills Gap Analysis ───────────────────────────────────────────────────────
 export async function analyzeSkillsGap(apiKey, jobs, parsedResume) {
   const system = `You are a career advisor analyzing skill gaps from job postings.
@@ -231,5 +320,5 @@ ${allRequirements}
 Identify the top skills appearing in these job descriptions that the candidate lacks.`
 
   const result = await callClaude(apiKey, system, prompt, 1500)
-  return JSON.parse(result)
+  return parseJSON(result)
 }

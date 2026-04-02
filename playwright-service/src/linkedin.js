@@ -1,10 +1,38 @@
 /**
+ * Verify the saved session is still logged in.
+ * If not, throw a helpful error pointing to the setup command.
+ */
+async function ensureLoggedIn(page) {
+  await page.goto('https://www.linkedin.com/feed', { waitUntil: 'domcontentloaded', timeout: 20000 })
+
+  const loggedIn = await page.locator('.global-nav__me-photo, .feed-identity-module__actor-meta, nav[aria-label="Global Navigation"]')
+    .first().isVisible({ timeout: 6000 }).catch(() => false)
+
+  if (!loggedIn) {
+    throw new Error(
+      'LinkedIn session not found or expired.\n' +
+      'Run: npm run setup-linkedin  (from the project root)\n' +
+      'This opens a browser so you can log in once — no password storage needed.'
+    )
+  }
+}
+
+/**
  * LinkedIn Easy Apply handler
  * Navigates through multi-step Easy Apply modal, fills all form fields,
  * and submits. Detects and reports blockers at each step.
  */
 export async function fillLinkedInEasyApply({ page, context, resumeText, coverLetter, questionBank }) {
   try {
+    // Save the job URL before ensureLoggedIn navigates away
+    const jobUrl = page.url()
+
+    // Ensure we're logged in (may navigate to /feed or /login)
+    await ensureLoggedIn(page)
+
+    // Navigate back to the job posting
+    await page.goto(jobUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
+
     // Look for Easy Apply button
     const easyApplyBtn = page.locator('button:has-text("Easy Apply"), .jobs-apply-button--top-card button').first()
     const btnVisible = await easyApplyBtn.isVisible({ timeout: 8000 }).catch(() => false)

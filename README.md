@@ -1,395 +1,285 @@
-# BountyHunter 🎯
-**AI-powered job application copilot** — searches jobs, scores fit, tailors your resume, writes cover letters, and auto-fills applications.
-
----
-
-## ⚡ Quickstart (local dev)
-
-> Full step-by-step instructions are in the [Setup section](#step-by-step-setup) below.
-
-```bash
-# 1. Clone
-git clone https://github.com/mvillafranca98/Bountyhunter.git
-cd Bountyhunter
-
-# 2. Install deps
-cd worker && npm install
-cd ../frontend && npm install
-
-# 3. Log in to Cloudflare (approve in browser immediately)
-npx wrangler login
-
-# 4. Create Cloudflare resources (one-time only)
-cd worker
-npm run db:create      # → copy the database_id into wrangler.toml
-npm run r2:create
-npm run queue:create
-
-# 5. Fill in your secrets
-#    Open worker/.dev.vars (hidden file — press Cmd+Shift+. in Finder to reveal it)
-#    JWT_SECRET     → any 32+ char random string: https://generate-secret.vercel.app/32
-#    ANTHROPIC_API_KEY → your sk-ant-... key from console.anthropic.com
-
-# 6. Run DB migrations locally
-npm run db:migrate:local
-
-# 7. Start dev servers (two separate terminals)
-npm run dev                        # terminal 1 — API on :8787
-cd ../frontend && npm run dev      # terminal 2 — App on :5173
-```
-
-Open **http://localhost:5173** — register, complete onboarding, upload your resume, and start hunting.
-
----
-
-## 🚀 Deploy via GitHub Actions
-
-Every push to `main` auto-deploys the Worker + Frontend.
-
-**Add these secrets in GitHub → Settings → Secrets and variables → Actions:**
-
-| Secret | Where to get it |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → Create Token → "Edit Cloudflare Workers" |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages → right sidebar |
-| `JWT_SECRET` | Same value as your `.dev.vars` |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
-
-> ⚠️ Run `db:create`, `r2:create`, and `queue:create` once from your local machine first — GitHub Actions deploys code but cannot create Cloudflare infrastructure.
+# BountyHunter
+**AI-powered job application copilot** — parses your resume, scores job fit, tailors applications, and auto-fills LinkedIn Easy Apply forms.
 
 ---
 
 ## What it does
 
-1. You upload your resume → Claude parses it, builds a polished ATS-optimized master resume + LinkedIn copy
-2. You set target roles, salary range, and preferences
-3. Hit "Hunt jobs" → jobs are fetched, scored against your profile (0–100% fit)
-4. For high-fit jobs: Claude tailors your resume + writes a cover letter
-5. Auto-apply (LinkedIn Easy Apply via Playwright) or approve manually
-6. Dashboard shows: Applied / Needs Manual Attention / Expired / Low Fit
+1. **Upload your resume** → Claude parses it and generates a Harvard-style ATS-optimized master resume + LinkedIn About section, headline, and experience bullets
+2. **Set target roles, salary range, and preferences** during onboarding
+3. **Load sample jobs** (AI-generated and scored) or connect a live job API
+4. **Fit scoring** — every job gets a 0–100% match score with strengths/gaps breakdown
+5. **Prepare** — Claude tailors your resume and writes a custom cover letter per job
+6. **Auto-apply** — Playwright navigates LinkedIn Easy Apply and fills the form automatically
+7. **Dashboard** — tracks Applied / Needs Manual Attention / Expired / Low Fit
 
 ---
 
 ## Architecture
 
 ```
-frontend/           React 18 + Vite + Tailwind → Cloudflare Pages
-worker/             Cloudflare Workers (Hono) + D1 + R2 + Queues
-playwright-service/ Express + Playwright (runs on a VPS)
+Bountyhunter/
+├── frontend/           React 18 + Vite + Tailwind  →  Cloudflare Pages
+├── worker/             Cloudflare Workers (Hono) + D1 + R2 + Queues  →  API
+└── playwright-service/ Express + Playwright  →  LinkedIn auto-apply bot
 ```
 
 ---
 
 ## Prerequisites
 
-Make sure you have these installed before starting:
-
-| Tool | Version | Install |
+| Requirement | Version | Notes |
 |---|---|---|
-| Node.js | v18+ | [nodejs.org](https://nodejs.org) |
-| npm | v9+ | comes with Node |
+| Node.js | v18+ (v20 LTS recommended) | [nodejs.org](https://nodejs.org) |
+| npm | v9+ | Comes with Node |
 | Wrangler CLI | v4+ | `npm install -g wrangler` |
-| Cloudflare account | free tier works | [dash.cloudflare.com](https://dash.cloudflare.com) |
-| Anthropic API key | required | [console.anthropic.com](https://console.anthropic.com) |
+| Cloudflare account | Free tier | [dash.cloudflare.com](https://dash.cloudflare.com) |
+| Anthropic API key | Required | [console.anthropic.com](https://console.anthropic.com) |
+| LinkedIn account | Required for auto-apply | [linkedin.com](https://linkedin.com) |
 
 ---
 
-## Step-by-Step Setup
+## Quickstart (local dev)
 
-### Step 1 — Log in to Cloudflare
+### Step 1 — Clone and install
+
+```bash
+git clone https://github.com/mvillafranca98/Bountyhunter.git
+cd Bountyhunter
+
+# Install all dependencies (worker + frontend + playwright-service + root)
+cd worker && npm install && cd ..
+cd frontend && npm install && cd ..
+cd playwright-service && npm install && cd ..
+npm install
+```
+
+---
+
+### Step 2 — Log in to Cloudflare
 
 ```bash
 npx wrangler login
 ```
 
-This opens your browser. Approve access. You only need to do this once.
+Approve access in the browser that opens. One-time only.
 
 ---
 
-### Step 2 — Create Cloudflare Resources
-
-Run these commands one at a time from inside the `worker/` folder:
+### Step 3 — Create Cloudflare resources (one-time)
 
 ```bash
 cd worker
+npm run db:create      # → copy the printed database_id into wrangler.toml
+npm run r2:create
+npm run queue:create
+cd ..
 ```
 
-**Create the D1 database:**
-```bash
-npm run db:create
-```
-> It will print something like:
-> ```
-> ✅ Successfully created DB 'bountyhunter-db'
-> Created your database using D1's new storage backend
-> database_id = "abc123-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-> ```
-> **Copy that `database_id`** — you need it in the next step.
+After `db:create`, open `worker/wrangler.toml` and paste the `database_id`:
 
-**Paste the database_id into `wrangler.toml`:**
-
-Open `worker/wrangler.toml` and replace `PLACEHOLDER_REPLACE_AFTER_db:create` with your actual ID:
 ```toml
 [[d1_databases]]
 binding = "DB"
 database_name = "bountyhunter-db"
-database_id = "abc123-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # ← paste here
-```
-
-**Create the R2 storage bucket:**
-```bash
-npm run r2:create
-```
-
-**Create the job queue:**
-```bash
-npm run queue:create
+database_id = "paste-your-id-here"   # ← replace this
 ```
 
 ---
 
-### Step 3 — Set Secrets
-
-These are environment variables that are never stored in code.
-
-```bash
-# A random secret string (32+ characters) for signing JWTs
-# You can generate one at: https://generate-secret.vercel.app/32
-npx wrangler secret put JWT_SECRET
-
-# Your Anthropic API key (starts with sk-ant-)
-npx wrangler secret put ANTHROPIC_API_KEY
-```
-
-> For each command, Wrangler will prompt: `Enter a secret value:` — paste your value and press Enter.
-
----
-
-### Step 4 — Create Local Secrets File
-
-For **local development**, Wrangler reads secrets from a `.dev.vars` file (not from the cloud):
+### Step 4 — Configure secrets
 
 ```bash
 cp worker/.dev.vars.example worker/.dev.vars
 ```
 
-Now open `worker/.dev.vars` and fill in the values:
+Open `worker/.dev.vars` and fill in:
 
 ```ini
-JWT_SECRET=any-random-string-at-least-32-chars
+JWT_SECRET=any-random-32-char-string      # generate at: https://generate-secret.vercel.app/32
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 PLAYWRIGHT_SERVICE_URL=http://localhost:3001
 PLAYWRIGHT_SERVICE_TOKEN=local-dev-token
 ```
 
->  `.dev.vars` is in `.gitignore` — it will never be committed.
+> `.dev.vars` is gitignored — it will never be committed.
 
 ---
 
-### Step 5 — Run Database Migrations
-
-This creates all the tables in your local D1 database:
+### Step 5 — Run database migrations
 
 ```bash
-# Still inside worker/
-npm run db:migrate:local
+cd worker && npm run db:migrate:local && cd ..
 ```
 
-You should see output confirming each table was created (users, jobs, resumes, etc.).
+---
+
+### Step 6 — Set up LinkedIn session (one-time)
+
+This opens a real browser window. Log in to LinkedIn manually — 2FA and SSO work. The session is saved locally and reused automatically.
+
+```bash
+npm run setup-linkedin
+```
+
+You'll see `✅ Logged in! Session saved.` — then the window closes.
+
+> No LinkedIn credentials are stored anywhere. This only needs to be repeated if LinkedIn logs you out (~90 days).
 
 ---
 
-### Step 6 — Start the Worker (Backend)
+### Step 7 — Start everything
 
 ```bash
-# Still inside worker/
 npm run dev
 ```
 
-You should see:
-```
-⛅️ wrangler 4.x.x
-[wrangler:inf] Ready on http://localhost:8787
-```
+This starts all three services at once with color-coded output:
 
-Leave this terminal running.
+| Service | URL | Color |
+|---|---|---|
+| Worker (API) | http://localhost:8787 | Cyan |
+| Frontend | http://localhost:5173 | Magenta |
+| Playwright service | http://localhost:3001 | Yellow |
 
----
-
-### Step 7 — Start the Frontend
-
-Open a **new terminal tab/window**:
-
-```bash
-cd frontend
-npm run dev
-```
-
-You should see:
-```
-  VITE v6.x.x  ready in 400ms
-  ➜  Local:   http://localhost:5173/
-```
-
----
-
-### Step 8 — Open the App
-
-Go to **http://localhost:5173** in your browser.
+Open **http://localhost:5173** in your browser.
 
 ---
 
 ## Testing the Full Flow
 
-### Test 1 — Register & Onboarding
+### 1. Register & Onboarding
 
 1. Click **"Create one"** on the login page
 2. Fill in name, email, password → **Create account**
-3. You'll be sent to the 3-step onboarding:
-   - **Step 1 — Profile**: Fill location, work authorization, start date
-   - **Step 2 — Preferences**: Add a target role (e.g. "Software Engineer"), set salary range, configure auto-apply toggle
-   - **Step 3 — Resume**: Upload a PDF resume → Claude will parse it (~30–60 seconds)
-4. After upload, you'll land on the Dashboard
+3. Complete the 3-step onboarding:
+   - **Profile** — location, work authorization, start date
+   - **Preferences** — target roles, salary range, auto-apply toggle
+   - **Resume** — upload a PDF → Claude parses it and generates your master resume (~30–60 seconds)
 
 ---
 
-### Test 2 — Check Your Resume Studio
+### 2. Resume Studio
 
-1. Click **"Resume"** in the sidebar
-2. You'll see three tabs:
-   - **Master Resume** — Claude's ATS-optimized version (copy and use this)
-   - **LinkedIn Copy** — Ready-to-paste About section, headline, experience bullets
-   - **Parsed Data** — All extracted skills, job history, education
+Click **"Resume"** in the sidebar. Three tabs:
 
----
-
-### Test 3 — Search for Jobs
-
-1. Click **"Dashboard"** in the sidebar
-2. In the search bar, type a role (e.g. "Product Manager") or leave blank to use your target roles
-3. Click **"Hunt jobs"**
-4. You'll see a toast: *"Searching for… results will appear shortly"*
-5. Go to **"Job Queue"** in the sidebar — jobs will appear with fit scores once processed
-
->  Note: The job search pipeline requires a `JOB_SEARCH_API_URL` secret to be configured (see [Connecting Job Sources](#connecting-job-sources) below). Without it, the queue worker logs a warning and skips. Job scoring via Claude works once jobs are in the DB.
+| Tab | Contents |
+|---|---|
+| **Master Resume** | Harvard-style ATS resume — rendered with proper headings, bullets, bold text |
+| **LinkedIn Copy** | Ready-to-paste About section, headline, and per-role experience bullets |
+| **Parsed Data** | Extracted skills, job history, and education |
 
 ---
 
-### Test 4 — Prepare + Apply to a Job
+### 3. Load Jobs
+
+Two ways to populate the Job Queue:
+
+**Option A — AI sample jobs (instant, no API key needed):**
+1. Go to **Dashboard**
+2. Click **"✨ Load 5 AI-scored sample jobs"**
+3. Claude generates 5 realistic job postings tailored to your resume and scores each one (~20–30s)
+4. Jobs appear in the **Job Queue** with fit scores
+
+**Option B — Live job search:**
+1. Type keywords in the search bar (or leave blank to use your target roles)
+2. Click **"Hunt jobs"**
+3. Requires `JOB_SEARCH_API_URL` to be configured (see [Connecting Job Sources](#connecting-job-sources))
+
+---
+
+### 4. Prepare & Apply
 
 1. In **Job Queue**, click any job card to expand it
-2. Click **"Prepare"** → Claude tailors your resume + writes a cover letter (~20–40 seconds)
+2. Click **"Prepare"** → Claude tailors your resume + writes a cover letter (~20–40s)
 3. Review the tailored resume preview and cover letter
-4. Click:
-   - **"Auto-apply"** → queues the job for Playwright automation (requires playwright-service running)
-   - **"Mark as applied (manual)"** → records it immediately
+4. Choose:
+   - **"Auto-apply"** → Playwright opens LinkedIn Easy Apply and fills the form automatically
+   - **"Mark as applied (manual)"** → records the application immediately without automation
 
 ---
 
-### Test 5 — Question Bank
+### 5. Question Bank
 
 1. Click **"Question Bank"** in the sidebar
-2. Click **"Seed with AI answers"** → Claude generates personalized answers to 8 common screening questions based on your profile
-3. Review and edit any answers
-4. Click **"+ Add"** to add custom questions (e.g. "Do you have a non-compete agreement?") and click "AI answer" to auto-generate
+2. Click **"Seed with AI answers"** → Claude generates personalized answers to 8 common screening questions
+3. Edit any answers, or click **"+ Add"** to add custom questions with AI-generated responses
 
 ---
 
-### Test 6 — Applications Dashboard
+### 6. Applications Dashboard
 
-Click **"Applications"** in the sidebar to see three lanes:
-- **Applied** — all submitted applications
-- **Needs You** — blocked auto-applies (video required, CAPTCHA, etc.) with reason labels
-- **Expired** — postings that were no longer available
+Click **"Applications"** to see:
+- **Applied** — all submitted applications with method (auto / manual)
+- **Needs You** — blocked auto-applies with reason labels (CAPTCHA, video required, external ATS, etc.)
+- **Expired** — postings no longer available
 
 ---
 
 ## Connecting Job Sources
 
-The job search queue currently expects a REST API at `JOB_SEARCH_API_URL`. You have two options:
+The "Hunt jobs" button uses `JOB_SEARCH_API_URL`. Without it, use the **"✨ Load sample jobs"** button instead.
 
-### Option A — Use the RapidAPI LinkedIn Jobs Scraper (easiest)
-1. Sign up at [rapidapi.com](https://rapidapi.com) and subscribe to **"JSearch"** (free tier: 500 req/month)
-2. Add to `.dev.vars`:
-   ```ini
-   JOB_SEARCH_API_URL=https://jsearch.p.rapidapi.com
-   JOB_SEARCH_API_KEY=your-rapidapi-key
-   ```
-3. Update `worker/src/queue.js` → `handleSearchJobs()` to match JSearch's API shape (the function is clearly marked)
+To connect a live source, add to `worker/.dev.vars`:
 
-### Option B — Mock jobs for testing
-Insert test jobs directly into the local D1 database:
-```bash
-npx wrangler d1 execute bountyhunter-db --local --command \
-  "INSERT INTO jobs (id, user_id, source, external_id, title, company, location, url, description, status)
-   VALUES ('test-job-1', 'YOUR_USER_ID', 'linkedin', 'ext-1', 'Senior Software Engineer',
-   'Acme Corp', 'Remote', 'https://linkedin.com/jobs/view/123',
-   'We are looking for a senior engineer with 5+ years of React and Node.js experience.
-   You will lead architecture decisions and mentor junior engineers.
-   Requirements: TypeScript, AWS, CI/CD, system design experience.', 'new')"
+```ini
+JOB_SEARCH_API_URL=https://jsearch.p.rapidapi.com
+JOB_SEARCH_API_KEY=your-rapidapi-key
 ```
-Then trigger scoring from the Job Queue UI.
 
-> Your `user_id` is the UUID created when you registered. Find it in the database:
-> ```bash
-> npx wrangler d1 execute bountyhunter-db --local --command "SELECT id, email FROM users"
-> ```
+Then update `handleSearchJobs()` in `worker/src/queue.js` to match the API response shape. [JSearch on RapidAPI](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) has a free tier (500 req/month).
 
 ---
 
-## Optional — Run the Playwright Auto-Apply Service
+## Deploy to Production
 
-This runs locally for dev/testing. For production, deploy it to a VPS.
+### Worker
 
-```bash
-# New terminal tab
-cd playwright-service
-
-# Install Chromium (one-time, ~200MB)
-npm run install-browsers
-
-# Start the service
-npm run dev
-```
-
-The service starts on **http://localhost:3001**.
-
-Test it's alive:
-```bash
-curl http://localhost:3001/health
-# → {"status":"ok"}
-```
-
-Now when you click "Auto-apply" on a job in the UI, the worker queue will call this service.
-
----
-
-## Deploying to Production
-
-### Deploy the Worker
 ```bash
 cd worker
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler deploy
 ```
 
-### Deploy the Frontend (Cloudflare Pages)
+### Frontend (Cloudflare Pages)
+
 ```bash
 cd frontend
 npm run build
 npx wrangler pages deploy dist --project-name bountyhunter
 ```
 
-### Deploy the Playwright Service (VPS)
-1. SSH into your VPS (DigitalOcean / Hetzner / Linode)
+### Playwright Service (VPS)
+
+1. SSH into a VPS (DigitalOcean / Hetzner / Fly.io)
 2. `git clone` the repo, `cd playwright-service`
 3. `npm install && npm run install-browsers`
-4. Set `SERVICE_TOKEN` env var
-5. Run with PM2: `pm2 start npm --name "bountyhunter-pw" -- start`
-6. Update `PLAYWRIGHT_SERVICE_URL` and `PLAYWRIGHT_SERVICE_TOKEN` secrets in Wrangler:
+4. Create `.env` with `PORT=3001` and `SERVICE_TOKEN=your-secret`
+5. Run: `npm run setup-linkedin` (one-time, opens browser on the VPS — use VNC/RDP)
+6. Start with PM2: `pm2 start npm --name "bountyhunter-pw" -- start`
+7. Update secrets in Wrangler:
    ```bash
-   wrangler secret put PLAYWRIGHT_SERVICE_URL    # http://your-vps-ip:3001
-   wrangler secret put PLAYWRIGHT_SERVICE_TOKEN  # your shared secret
+   wrangler secret put PLAYWRIGHT_SERVICE_URL    # https://your-vps-ip:3001
+   wrangler secret put PLAYWRIGHT_SERVICE_TOKEN  # same as SERVICE_TOKEN
    ```
+
+---
+
+## Deploy via GitHub Actions
+
+Every push to `main` auto-deploys the Worker + Frontend.
+
+**Add these secrets in GitHub → Settings → Secrets → Actions:**
+
+| Secret | Where to get it |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) → "Edit Cloudflare Workers" |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages → right sidebar |
+| `JWT_SECRET` | Same value as in `.dev.vars` |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
+
+> ⚠️ Run `db:create`, `r2:create`, and `queue:create` once locally first — GitHub Actions deploys code but cannot create Cloudflare infrastructure.
 
 ---
 
@@ -397,36 +287,44 @@ npx wrangler pages deploy dist --project-name bountyhunter
 
 ```
 Bountyhunter/
+├── package.json                    ← Root: `npm run dev` starts everything
 ├── worker/
 │   ├── src/
-│   │   ├── index.js              ← API entry point
-│   │   ├── queue.js              ← Async job pipeline
+│   │   ├── index.js                ← API entry point (Hono)
+│   │   ├── queue.js                ← Async job pipeline (search → score → apply)
 │   │   ├── lib/
-│   │   │   ├── claude.js         ← All AI functions
-│   │   │   ├── crypto.js         ← JWT + password hashing
-│   │   │   └── r2.js             ← File storage helpers
-│   │   ├── middleware/auth.js    ← JWT verification
-│   │   └── routes/               ← auth, profile, resume, jobs, applications, questions, dashboard
-│   ├── migrations/0001_initial.sql
+│   │   │   ├── claude.js           ← All Claude AI functions
+│   │   │   ├── crypto.js           ← JWT + password hashing
+│   │   │   └── r2.js               ← File storage helpers
+│   │   ├── middleware/auth.js      ← JWT verification middleware
+│   │   └── routes/                 ← auth, profile, resume, jobs, applications, questions, dashboard
+│   ├── migrations/0001_initial.sql ← D1 schema
 │   ├── wrangler.toml
-│   └── .dev.vars.example         ← Copy to .dev.vars
+│   ├── .dev.vars.example           ← Copy to .dev.vars and fill in secrets
+│   └── .dev.vars                   ← ⛔ gitignored — never committed
 │
 ├── frontend/
 │   └── src/
-│       ├── App.jsx               ← Routes + auth guards
-│       ├── context/AuthContext   ← JWT + user state
-│       ├── lib/api.js            ← All API calls
+│       ├── App.jsx                 ← Routes + auth guards
+│       ├── context/AuthContext.jsx ← JWT + user state
+│       ├── lib/api.js              ← All API calls (axios)
 │       ├── pages/
-│       │   ├── auth/             ← Login, Register
-│       │   ├── onboarding/       ← 3-step onboarding
-│       │   └── dashboard/        ← Dashboard, JobQueue, Applications, QuestionBank, ResumeStudio, Profile
-│       └── components/           ← AppShell, Sidebar
+│       │   ├── auth/               ← Login, Register
+│       │   ├── onboarding/         ← 3-step onboarding flow
+│       │   └── dashboard/          ← Dashboard, JobQueue, ResumeStudio, Applications, QuestionBank, Profile
+│       └── components/             ← AppShell, Sidebar
 │
 └── playwright-service/
-    └── src/
-        ├── index.js              ← Express HTTP server
-        ├── apply.js              ← Platform router
-        └── linkedin.js           ← LinkedIn Easy Apply logic
+    ├── scripts/
+    │   └── setup-linkedin.js       ← One-time LinkedIn session setup (run via `npm run setup-linkedin`)
+    ├── src/
+    │   ├── index.js                ← Express HTTP server
+    │   ├── apply.js                ← Platform router + persistent session
+    │   ├── linkedin.js             ← LinkedIn Easy Apply automation
+    │   └── blockers.js             ← Blocker reason codes
+    ├── .env.example                ← Copy to .env
+    ├── .env                        ← ⛔ gitignored — never committed
+    └── .session/                   ← ⛔ gitignored — saved LinkedIn cookies
 ```
 
 ---
@@ -435,9 +333,23 @@ Bountyhunter/
 
 | Problem | Fix |
 |---|---|
-| `database_id = "PLACEHOLDER_..."` error | Run `npm run db:create` and paste the ID into `wrangler.toml` |
-| 401 errors from the API | Make sure `JWT_SECRET` is set in `.dev.vars` |
-| Resume upload times out | Claude can take 30–90s for large resumes — increase the axios timeout in `api.js` if needed |
-| Job search does nothing | `JOB_SEARCH_API_URL` is not set — use Option B (mock jobs) to test scoring |
-| Auto-apply always blocked | playwright-service must be running on `:3001` and your LinkedIn session must be logged in |
-| Wrangler can't find D1 binding | Run `npm run db:migrate:local` to init the local DB |
+| `database_id = "PLACEHOLDER_..."` error | Run `cd worker && npm run db:create` and paste the ID into `wrangler.toml` |
+| 401 errors from the API | Check `JWT_SECRET` is set in `worker/.dev.vars` |
+| Resume parsing fails | Ensure `ANTHROPIC_API_KEY` is set in `worker/.dev.vars` and starts with `sk-ant-` |
+| Resume upload times out | Claude takes 30–90s for large resumes — this is normal |
+| "Load sample jobs" fails | Same as above — check `ANTHROPIC_API_KEY` |
+| "Hunt jobs" does nothing | `JOB_SEARCH_API_URL` is not set — use "✨ Load sample jobs" instead |
+| Auto-apply fails: session error | Run `npm run setup-linkedin` to refresh the LinkedIn session |
+| Auto-apply: `external_ats` blocker | The job doesn't have LinkedIn Easy Apply — apply manually |
+| Wrangler: `ECANCELED` error | Delete `.wrangler/state/v3/` WAL files and restart |
+| Port already in use | Run `lsof -ti :8787 :5173 :3001 \| xargs kill -9` |
+
+---
+
+## Security Notes
+
+- `worker/.dev.vars` — contains API keys — **never committed** (gitignored)
+- `playwright-service/.env` — service token — **never committed** (gitignored)
+- `playwright-service/.session/` — LinkedIn browser cookies — **never committed** (gitignored)
+- No LinkedIn credentials are ever stored — authentication uses a saved browser session only
+- All API keys are passed via environment variables, never hardcoded in source files

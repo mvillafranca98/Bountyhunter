@@ -2,10 +2,13 @@ import { useState, useRef } from 'react'
 import { toast } from 'react-toastify'
 import { resumeApi } from '../../../lib/api'
 
+// Local worker URL — resolved by Vite at build time, always version-matched
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+
 // Extract text from PDF using pdf.js (loaded dynamically)
 async function extractPdfText(file) {
   const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist')
-  GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs`
+  GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
   const arrayBuffer = await file.arrayBuffer()
   const pdf = await getDocument({ data: arrayBuffer }).promise
