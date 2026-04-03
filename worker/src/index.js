@@ -17,7 +17,9 @@ app.use('*', cors({
   origin: (origin, c) => {
     const allowed = [
       'http://localhost:5173',
+      'http://localhost:5175',
       'https://bountyhunter.pages.dev',
+      'https://bountyhunter-18j.pages.dev',
       c.env?.CORS_ORIGIN,
     ].filter(Boolean)
     return allowed.includes(origin) ? origin : allowed[0]

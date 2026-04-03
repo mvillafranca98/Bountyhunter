@@ -68,7 +68,7 @@ jobs:
       - name: Build frontend
         run: npm run build
         env:
-          VITE_API_URL: https://bountyhunter-worker.${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.workers.dev
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
       - name: Deploy to Cloudflare Pages
         run: npx wrangler pages deploy dist --project-name=bountyhunter
