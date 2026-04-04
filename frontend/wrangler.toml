@@ -1,0 +1,9 @@
+name = "bountyhunter-app"
+compatibility_date = "2025-04-01"
+
+[assets]
+directory = "dist"
+
+# SPA fallback — serves index.html for all non-file routes
+[assets.routing]
+has_user_worker = false
