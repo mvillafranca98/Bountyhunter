@@ -115,6 +115,136 @@ jobRoutes.post('/seed', async (c) => {
   return c.json({ seeded: jobs.length, message: `${jobs.length} sample jobs generated and scored!` })
 })
 
+// POST /jobs/real-search — fetch real jobs from Remotive API (free, no key needed)
+jobRoutes.post('/real-search', async (c) => {
+  const userId = c.get('userId')
+  const body = await c.req.json().catch(() => ({}))
+  let { keywords } = body
+
+  // If no keywords provided, fall back to user's target roles
+  if (!keywords) {
+    const roles = await c.env.DB.prepare(
+      'SELECT role_title FROM target_roles WHERE user_id = ? ORDER BY priority LIMIT 3'
+    ).bind(userId).all()
+    keywords = roles.results.map(r => r.role_title).join(', ') || 'software engineer'
+  }
+
+  // Fetch from Remotive API (100% free, no API key)
+  let remoteJobs = []
+  try {
+    const res = await fetch(
+      `https://remotive.com/api/remote-jobs?limit=5&search=${encodeURIComponent(keywords)}`
+    )
+    if (!res.ok) throw new Error(`Remotive API returned ${res.status}`)
+    const json = await res.json()
+    remoteJobs = (json.jobs || []).slice(0, 5)
+  } catch (e) {
+    return c.json({ error: `Failed to fetch jobs from Remotive: ${e.message}` }, 502)
+  }
+
+  if (!remoteJobs.length) {
+    return c.json({ jobs: [], message: `No jobs found for "${keywords}"` })
+  }
+
+  // Optionally score with Claude if API key is available
+  const hasAI = c.env.ANTHROPIC_API_KEY && !c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')
+  let parsedResume = {}
+  let userPrefs = {}
+
+  if (hasAI) {
+    const resume = await c.env.DB.prepare(
+      'SELECT parsed_data FROM resumes WHERE user_id = ? AND is_active = 1 LIMIT 1'
+    ).bind(userId).first()
+    parsedResume = resume?.parsed_data ? JSON.parse(resume.parsed_data) : {}
+
+    const salary = await c.env.DB.prepare(
+      'SELECT * FROM salary_preferences WHERE user_id = ? LIMIT 1'
+    ).bind(userId).first()
+    const user = await c.env.DB.prepare(
+      'SELECT location, employment_type FROM users WHERE id = ?'
+    ).bind(userId).first()
+
+    userPrefs = {
+      salary: salary ? `$${salary.min_yearly}–$${salary.max_yearly}/yr` : null,
+      location: user?.location || null,
+      employment_type: user?.employment_type || 'full-time',
+    }
+  }
+
+  // Insert into D1 and optionally score
+  const stmts = []
+  const insertedJobs = []
+
+  for (const job of remoteJobs) {
+    const id = generateId()
+    const externalId = String(job.id)
+
+    // Strip HTML tags from description for clean storage
+    const cleanDesc = (job.description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    const truncatedDesc = cleanDesc.slice(0, 4000)
+
+    let fitScore = null
+    let fitReasoning = null
+    let status = 'new'
+
+    // Score with Claude if available
+    if (hasAI) {
+      try {
+        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, truncatedDesc || job.title, parsedResume, userPrefs)
+        fitScore = result.score
+        fitReasoning = JSON.stringify(result)
+        status = result.score >= 75 ? 'scored' : 'low_fit'
+      } catch (e) {
+        // Scoring failed — insert without score
+        console.error(`Scoring failed for job ${job.title}: ${e.message}`)
+      }
+    }
+
+    stmts.push(
+      c.env.DB.prepare(
+        `INSERT OR IGNORE INTO jobs
+         (id, user_id, source, external_id, title, company, location, url, description, fit_score, fit_reasoning, status)
+         VALUES (?, ?, 'remotive', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        id, userId, externalId,
+        job.title, job.company_name,
+        job.candidate_required_location || '',
+        job.url || `https://remotive.com/remote-jobs/${job.id}`,
+        truncatedDesc,
+        fitScore, fitReasoning, status
+      )
+    )
+
+    insertedJobs.push({
+      id,
+      source: 'remotive',
+      external_id: externalId,
+      title: job.title,
+      company: job.company_name,
+      location: job.candidate_required_location || '',
+      url: job.url,
+      description: truncatedDesc,
+      salary: job.salary || null,
+      tags: job.tags || [],
+      category: job.category || null,
+      job_type: job.job_type || null,
+      publication_date: job.publication_date || null,
+      fit_score: fitScore,
+      fit_reasoning: fitReasoning ? JSON.parse(fitReasoning) : null,
+      status,
+    })
+  }
+
+  if (stmts.length) await c.env.DB.batch(stmts)
+
+  return c.json({
+    jobs: insertedJobs,
+    count: insertedJobs.length,
+    scored: hasAI,
+    message: `Found ${insertedJobs.length} real jobs for "${keywords}"${hasAI ? ' (AI-scored)' : ''}!`,
+  })
+})
+
 // GET /jobs — list user's jobs with optional status filter
 jobRoutes.get('/', async (c) => {
   const userId = c.get('userId')

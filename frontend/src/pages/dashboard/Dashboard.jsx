@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [data, setData] = useState(null)
   const [searching, setSearching] = useState(false)
   const [seeding, setSeeding] = useState(false)
+  const [findingReal, setFindingReal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
@@ -54,6 +55,19 @@ export default function Dashboard() {
       toast.error(err.response?.data?.error || 'Failed to load sample jobs')
     } finally {
       setSeeding(false)
+    }
+  }
+
+  const findRealJobs = async () => {
+    setFindingReal(true)
+    try {
+      const { data: r } = await jobsApi.realSearch({ keywords: searchQuery || undefined })
+      toast.success(r.message || 'Real jobs loaded!')
+      dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to find real jobs')
+    } finally {
+      setFindingReal(false)
     }
   }
 
@@ -88,20 +102,36 @@ export default function Dashboard() {
           <span className="text-xs text-gray-600">or</span>
           <div className="h-px flex-1 bg-surface-600" />
         </div>
-        <button
-          onClick={seedJobs}
-          disabled={seeding}
-          className="w-full btn-ghost text-sm flex items-center justify-center gap-2"
-        >
-          {seeding ? (
-            <>
-              <span className="w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-              Claude is generating 5 sample jobs… (this takes ~30s)
-            </>
-          ) : (
-            '✨ Load 5 AI-scored sample jobs (based on your resume)'
-          )}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={seedJobs}
+            disabled={seeding || findingReal}
+            className="flex-1 btn-ghost text-sm flex items-center justify-center gap-2"
+          >
+            {seeding ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                Generating sample jobs… (~30s)
+              </>
+            ) : (
+              '\u2728 Load 5 AI-scored sample jobs'
+            )}
+          </button>
+          <button
+            onClick={findRealJobs}
+            disabled={findingReal || seeding}
+            className="flex-1 btn-ghost text-sm flex items-center justify-center gap-2"
+          >
+            {findingReal ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                Finding real jobs…
+              </>
+            ) : (
+              '\uD83D\uDD0D Find 5 real jobs'
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Stats grid */}
