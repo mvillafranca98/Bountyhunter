@@ -8,8 +8,9 @@ const STATUS_TABS = [
   { key: 'ready',        label: 'Ready' },
   { key: 'applied',      label: 'Applied' },
   { key: 'needs_manual', label: 'Needs You' },
-  { key: 'expired',      label: 'Expired' },
   { key: 'low_fit',      label: 'Low Fit' },
+  { key: 'flagged',      label: 'Flagged' },
+  { key: 'expired',      label: 'Expired' },
 ]
 
 function FitBadge({ score }) {
@@ -23,7 +24,7 @@ function StatusBadge({ status }) {
   const map = {
     new: 'badge-gray', scored: 'badge-blue', ready: 'badge-purple',
     applied: 'badge-green', needs_manual: 'badge-amber',
-    expired: 'badge-gray', low_fit: 'badge-red',
+    expired: 'badge-gray', low_fit: 'badge-red', flagged: 'badge-red',
   }
   return <span className={`badge ${map[status] || 'badge-gray'} capitalize`}>{status?.replace('_', ' ')}</span>
 }
@@ -32,17 +33,20 @@ export default function JobQueue() {
   const [jobs, setJobs] = useState([])
   const [counts, setCounts] = useState({})
   const [activeStatus, setActiveStatus] = useState(null)
+  const [sortBy, setSortBy] = useState('newest')
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(false)
   const [preparing, setPreparing] = useState(false)
   const [applying, setApplying] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
-  const load = async (status) => {
+  const load = async (status, sort) => {
     setLoading(true)
     try {
+      const params = { sort }
+      if (status) params.status = status
       const [jobsRes, countsRes] = await Promise.all([
-        jobsApi.list(status ? { status } : {}),
+        jobsApi.list(params),
         jobsApi.counts(),
       ])
       setJobs(jobsRes.data.jobs)
@@ -52,7 +56,7 @@ export default function JobQueue() {
     }
   }
 
-  useEffect(() => { load(activeStatus) }, [activeStatus])
+  useEffect(() => { load(activeStatus, sortBy) }, [activeStatus, sortBy])
 
   const prepareJob = async (job) => {
     setPreparing(true)
@@ -60,7 +64,7 @@ export default function JobQueue() {
       const { data } = await jobsApi.prepare(job.id)
       toast.success('Resume tailored + cover letter ready!')
       setSelected({ ...job, prepared: data })
-      load(activeStatus)
+      load(activeStatus, sortBy)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Preparation failed')
     } finally {
@@ -74,7 +78,7 @@ export default function JobQueue() {
       await applicationsApi.apply(job.id, { method: 'manual' })
       toast.success('Marked as applied!')
       setSelected(null)
-      load(activeStatus)
+      load(activeStatus, sortBy)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -94,7 +98,7 @@ export default function JobQueue() {
       })
       toast.success('Auto-apply queued!')
       setSelected(null)
-      load(activeStatus)
+      load(activeStatus, sortBy)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -127,7 +131,21 @@ export default function JobQueue() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Job Queue</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-bold text-white">Job Queue</h1>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-400">Sort by:</span>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="input text-sm py-1 px-2 w-auto"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="score">Highest score</option>
+          </select>
+        </div>
+      </div>
 
       {/* Status tabs */}
       <div className="flex gap-1 flex-wrap">

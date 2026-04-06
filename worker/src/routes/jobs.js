@@ -444,10 +444,11 @@ jobRoutes.put('/:id/flag', async (c) => {
   return c.json({ success: true })
 })
 
-// GET /jobs — list user's jobs with optional status filter
+// GET /jobs — list user's jobs with optional status filter and sort
 jobRoutes.get('/', async (c) => {
   const userId = c.get('userId')
   const status = c.req.query('status')        // filter by status
+  const sort = c.req.query('sort') || 'newest' // newest | oldest | score
   const limit = parseInt(c.req.query('limit') || '50')
   const offset = parseInt(c.req.query('offset') || '0')
 
@@ -459,7 +460,17 @@ jobRoutes.get('/', async (c) => {
     bindings.push(status)
   }
 
-  query += ' ORDER BY fit_score DESC, created_at DESC LIMIT ? OFFSET ?'
+  // Sort order
+  if (sort === 'oldest') {
+    query += ' ORDER BY created_at ASC'
+  } else if (sort === 'score') {
+    query += ' ORDER BY fit_score DESC NULLS LAST, created_at DESC'
+  } else {
+    // newest (default)
+    query += ' ORDER BY created_at DESC'
+  }
+
+  query += ' LIMIT ? OFFSET ?'
   bindings.push(limit, offset)
 
   const { results } = await c.env.DB.prepare(query).bind(...bindings).all()

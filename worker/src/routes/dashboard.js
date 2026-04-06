@@ -29,11 +29,11 @@ dashboardRoutes.get('/summary', async (c) => {
        WHERE b.user_id = ? ORDER BY b.created_at DESC LIMIT 5`
     ).bind(userId).all(),
 
-    // Top 5 scored jobs ready to apply
+    // Top 5 scored jobs ready to apply (newest first)
     c.env.DB.prepare(
-      `SELECT id, title, company, location, url, fit_score, status, salary_min, salary_max, salary_type, posted_at
+      `SELECT id, title, company, location, url, fit_score, status, salary_min, salary_max, salary_type, posted_at, created_at
        FROM jobs WHERE user_id = ? AND status IN ('scored', 'ready') AND fit_score >= 70
-       ORDER BY fit_score DESC LIMIT 5`
+       ORDER BY created_at DESC LIMIT 5`
     ).bind(userId).all(),
   ])
 
