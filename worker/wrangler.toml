@@ -33,6 +33,7 @@ queue = "bountyhunter-job-queue"
 # ─── Secrets (set via `wrangler secret put <NAME>`) ────────────────────────────
 # JWT_SECRET         — random 32+ char string
 # ANTHROPIC_API_KEY  — from console.anthropic.com
+# RAPIDAPI_KEY       — from rapidapi.com (enables JSearch: Indeed/LinkedIn/Glassdoor aggregation)
 # PLAYWRIGHT_SERVICE_URL — http://your-vps-ip:3001
 # PLAYWRIGHT_SERVICE_TOKEN — shared secret for playwright microservice
 

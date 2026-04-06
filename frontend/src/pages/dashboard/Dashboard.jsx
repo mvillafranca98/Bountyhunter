@@ -63,11 +63,33 @@ export default function Dashboard() {
     try {
       const { data: r } = await jobsApi.realSearch({ keywords: searchQuery || undefined })
       toast.success(r.message || 'Real jobs loaded!')
+      // Show which sources returned results
+      if (r.sources) {
+        const okSources = r.sources.filter(s => s.status === 'ok' && s.count > 0)
+        const failedSources = r.sources.filter(s => s.status === 'error')
+        if (failedSources.length > 0) {
+          toast.warn(`Some sources unavailable: ${failedSources.map(s => s.name).join(', ')}`, { autoClose: 4000 })
+        }
+      }
       dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to find real jobs')
     } finally {
       setFindingReal(false)
+    }
+  }
+
+  const flagJob = async (jobId) => {
+    try {
+      await jobsApi.flag(jobId)
+      // Remove flagged job from top_jobs list
+      setData(prev => ({
+        ...prev,
+        top_jobs: (prev?.top_jobs || []).filter(j => j.id !== jobId),
+      }))
+      toast.info('Job dismissed')
+    } catch {
+      toast.error('Failed to dismiss job')
     }
   }
 
@@ -128,7 +150,7 @@ export default function Dashboard() {
                 Finding real jobs…
               </>
             ) : (
-              '\uD83D\uDD0D Find 5 real jobs'
+              '\uD83D\uDD0D Find real jobs'
             )}
           </button>
         </div>
@@ -152,12 +174,24 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {(data?.top_jobs?.length ? data.top_jobs : []).map(job => (
-              <div key={job.id} className="card flex items-center gap-3 hover:border-brand/40 transition-colors">
+              <div key={job.id} className="card flex items-center gap-3 hover:border-brand/40 transition-all group">
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-white text-sm truncate">{job.title}</p>
-                  <p className="text-xs text-gray-500 truncate">{job.company} · {job.location}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {job.company} · {job.location}
+                    {job.source && <span className="ml-1 text-gray-600">({job.source})</span>}
+                  </p>
                 </div>
                 <FitPill score={job.fit_score} />
+                <button
+                  onClick={() => flagJob(job.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-600 hover:text-danger rounded"
+                  title="Dismiss job"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             ))}
             {!data?.top_jobs?.length && (

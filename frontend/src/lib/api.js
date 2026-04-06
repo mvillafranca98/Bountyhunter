@@ -60,6 +60,7 @@ export const jobsApi = {
   get: (id) => api.get(`/jobs/${id}`),
   prepare: (id) => api.post(`/jobs/${id}/prepare`, {}, { timeout: 90000 }),
   updateStatus: (id, status) => api.put(`/jobs/${id}/status`, { status }),
+  flag: (id) => api.put(`/jobs/${id}/flag`),
 }
 
 // ─── Applications ──────────────────────────────────────────────────────────────

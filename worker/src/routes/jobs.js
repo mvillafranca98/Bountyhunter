@@ -115,7 +115,98 @@ jobRoutes.post('/seed', async (c) => {
   return c.json({ seeded: jobs.length, message: `${jobs.length} sample jobs generated and scored!` })
 })
 
-// POST /jobs/real-search — fetch real jobs from Remotive API (free, no key needed)
+// ─── Helper: strip HTML and truncate description ──────────────────────────────
+function cleanDescription(raw) {
+  const cleaned = (raw || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return cleaned.slice(0, 4000)
+}
+
+// ─── Helper: fetch from Remotive (free, no key) ──────────────────────────────
+async function fetchRemotive(keywords) {
+  const res = await fetch(
+    `https://remotive.com/api/remote-jobs?limit=5&search=${encodeURIComponent(keywords)}`
+  )
+  if (!res.ok) throw new Error(`Remotive API returned ${res.status}`)
+  const json = await res.json()
+  return (json.jobs || []).slice(0, 5).map(job => ({
+    title: job.title,
+    company: job.company_name,
+    location: job.candidate_required_location || '',
+    url: job.url || `https://remotive.com/remote-jobs/${job.id}`,
+    description: cleanDescription(job.description),
+    source: 'remotive',
+    external_id: String(job.id),
+    salary: job.salary || null,
+    posted_at: job.publication_date || null,
+  }))
+}
+
+// ─── Helper: fetch from JSearch / RapidAPI (covers Indeed, LinkedIn, etc.) ────
+async function fetchJSearch(keywords, rapidApiKey) {
+  const res = await fetch(
+    `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(keywords)}&num_pages=1&page=1`,
+    {
+      headers: {
+        'x-rapidapi-key': rapidApiKey,
+        'x-rapidapi-host': 'jsearch.p.rapidapi.com',
+      },
+    }
+  )
+  if (!res.ok) throw new Error(`JSearch API returned ${res.status}`)
+  const json = await res.json()
+  return (json.data || []).slice(0, 5).map(job => {
+    const parts = [job.job_city, job.job_state, job.job_country].filter(Boolean)
+    return {
+      title: job.job_title,
+      company: job.employer_name,
+      location: parts.join(', '),
+      url: job.job_apply_link,
+      description: cleanDescription(job.job_description),
+      source: 'jsearch',
+      external_id: job.job_id,
+      salary: job.job_min_salary && job.job_max_salary
+        ? `${job.job_min_salary}-${job.job_max_salary}`
+        : null,
+      posted_at: job.job_posted_at_datetime_utc || null,
+    }
+  })
+}
+
+// ─── Helper: fetch from Arbeitnow (free, no key) ─────────────────────────────
+async function fetchArbeitnow(keywords) {
+  const res = await fetch('https://www.arbeitnow.com/api/job-board-api')
+  if (!res.ok) throw new Error(`Arbeitnow API returned ${res.status}`)
+  const json = await res.json()
+  const lowerKeywords = keywords.toLowerCase().split(/[\s,]+/).filter(Boolean)
+  const filtered = (json.data || []).filter(job => {
+    const text = `${job.title} ${job.description} ${(job.tags || []).join(' ')}`.toLowerCase()
+    return lowerKeywords.some(kw => text.includes(kw))
+  })
+  return filtered.slice(0, 5).map(job => ({
+    title: job.title,
+    company: job.company_name,
+    location: job.location || '',
+    url: job.url || `https://www.arbeitnow.com/view/${job.slug}`,
+    description: cleanDescription(job.description),
+    source: 'arbeitnow',
+    external_id: job.slug,
+    salary: null,
+    posted_at: job.created_at || null,
+  }))
+}
+
+// ─── Helper: deduplicate jobs by title+company ────────────────────────────────
+function deduplicateJobs(jobs) {
+  const seen = new Set()
+  return jobs.filter(job => {
+    const key = `${(job.title || '').toLowerCase().trim()}|${(job.company || '').toLowerCase().trim()}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+// POST /jobs/real-search — fetch real jobs from multiple sources in parallel
 jobRoutes.post('/real-search', async (c) => {
   const userId = c.get('userId')
   const body = await c.req.json().catch(() => ({}))
@@ -129,24 +220,40 @@ jobRoutes.post('/real-search', async (c) => {
     keywords = roles.results.map(r => r.role_title).join(', ') || 'software engineer'
   }
 
-  // Fetch from Remotive API (100% free, no API key)
-  let remoteJobs = []
-  try {
-    const res = await fetch(
-      `https://remotive.com/api/remote-jobs?limit=5&search=${encodeURIComponent(keywords)}`
-    )
-    if (!res.ok) throw new Error(`Remotive API returned ${res.status}`)
-    const json = await res.json()
-    remoteJobs = (json.jobs || []).slice(0, 5)
-  } catch (e) {
-    return c.json({ error: `Failed to fetch jobs from Remotive: ${e.message}` }, 502)
+  // Build source fetchers — always include free sources, add JSearch if key available
+  const hasRapidApi = c.env.RAPIDAPI_KEY && !c.env.RAPIDAPI_KEY.startsWith('REPLACE_')
+  const sourceFetchers = [
+    { name: 'remotive', fn: () => fetchRemotive(keywords) },
+    { name: 'arbeitnow', fn: () => fetchArbeitnow(keywords) },
+  ]
+  if (hasRapidApi) {
+    sourceFetchers.push({ name: 'jsearch', fn: () => fetchJSearch(keywords, c.env.RAPIDAPI_KEY) })
   }
 
-  if (!remoteJobs.length) {
-    return c.json({ jobs: [], message: `No jobs found for "${keywords}"` })
+  // Query all sources in parallel
+  const results = await Promise.allSettled(sourceFetchers.map(s => s.fn()))
+
+  // Collect results and track source statuses
+  let allJobs = []
+  const sources = sourceFetchers.map((s, i) => {
+    const result = results[i]
+    if (result.status === 'fulfilled') {
+      allJobs = allJobs.concat(result.value)
+      return { name: s.name, status: 'ok', count: result.value.length }
+    } else {
+      console.error(`Source ${s.name} failed:`, result.reason?.message)
+      return { name: s.name, status: 'error', error: result.reason?.message }
+    }
+  })
+
+  // Deduplicate and limit
+  allJobs = deduplicateJobs(allJobs).slice(0, 10)
+
+  if (!allJobs.length) {
+    return c.json({ jobs: [], sources, message: `No jobs found for "${keywords}"` })
   }
 
-  // Optionally score with Claude if API key is available
+  // Optionally score top 5 with Claude if API key is available
   const hasAI = c.env.ANTHROPIC_API_KEY && !c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')
   let parsedResume = {}
   let userPrefs = {}
@@ -171,31 +278,26 @@ jobRoutes.post('/real-search', async (c) => {
     }
   }
 
-  // Insert into D1 and optionally score
+  // Insert into D1 and optionally score top 5
   const stmts = []
   const insertedJobs = []
 
-  for (const job of remoteJobs) {
+  for (let i = 0; i < allJobs.length; i++) {
+    const job = allJobs[i]
     const id = generateId()
-    const externalId = String(job.id)
-
-    // Strip HTML tags from description for clean storage
-    const cleanDesc = (job.description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    const truncatedDesc = cleanDesc.slice(0, 4000)
 
     let fitScore = null
     let fitReasoning = null
     let status = 'new'
 
-    // Score with Claude if available
-    if (hasAI) {
+    // Score only top 5 with Claude to save API calls
+    if (hasAI && i < 5) {
       try {
-        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, truncatedDesc || job.title, parsedResume, userPrefs)
+        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs)
         fitScore = result.score
         fitReasoning = JSON.stringify(result)
         status = result.score >= 75 ? 'scored' : 'low_fit'
       } catch (e) {
-        // Scoring failed — insert without score
         console.error(`Scoring failed for job ${job.title}: ${e.message}`)
       }
     }
@@ -204,31 +306,28 @@ jobRoutes.post('/real-search', async (c) => {
       c.env.DB.prepare(
         `INSERT OR IGNORE INTO jobs
          (id, user_id, source, external_id, title, company, location, url, description, fit_score, fit_reasoning, status)
-         VALUES (?, ?, 'remotive', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
-        id, userId, externalId,
-        job.title, job.company_name,
-        job.candidate_required_location || '',
-        job.url || `https://remotive.com/remote-jobs/${job.id}`,
-        truncatedDesc,
+        id, userId, job.source, job.external_id,
+        job.title, job.company,
+        job.location,
+        job.url,
+        job.description,
         fitScore, fitReasoning, status
       )
     )
 
     insertedJobs.push({
       id,
-      source: 'remotive',
-      external_id: externalId,
+      source: job.source,
+      external_id: job.external_id,
       title: job.title,
-      company: job.company_name,
-      location: job.candidate_required_location || '',
+      company: job.company,
+      location: job.location,
       url: job.url,
-      description: truncatedDesc,
-      salary: job.salary || null,
-      tags: job.tags || [],
-      category: job.category || null,
-      job_type: job.job_type || null,
-      publication_date: job.publication_date || null,
+      description: job.description,
+      salary: job.salary,
+      posted_at: job.posted_at,
       fit_score: fitScore,
       fit_reasoning: fitReasoning ? JSON.parse(fitReasoning) : null,
       status,
@@ -237,12 +336,28 @@ jobRoutes.post('/real-search', async (c) => {
 
   if (stmts.length) await c.env.DB.batch(stmts)
 
+  // Build summary message
+  const okSources = sources.filter(s => s.status === 'ok' && s.count > 0)
+  const sourceNames = okSources.map(s => s.name === 'jsearch' ? 'Indeed/LinkedIn' : s.name.charAt(0).toUpperCase() + s.name.slice(1))
+  const sourceMsg = sourceNames.length ? ` from ${sourceNames.join(', ')}` : ''
+
   return c.json({
     jobs: insertedJobs,
     count: insertedJobs.length,
     scored: hasAI,
-    message: `Found ${insertedJobs.length} real jobs for "${keywords}"${hasAI ? ' (AI-scored)' : ''}!`,
+    sources,
+    message: `Found ${insertedJobs.length} jobs${sourceMsg} for "${keywords}"${hasAI ? ' (top 5 AI-scored)' : ''}!`,
   })
+})
+
+// PUT /jobs/:id/flag — flag a job as not interested
+jobRoutes.put('/:id/flag', async (c) => {
+  const userId = c.get('userId')
+  const id = c.req.param('id')
+  await c.env.DB.prepare(
+    "UPDATE jobs SET status = 'flagged' WHERE id = ? AND user_id = ?"
+  ).bind(id, userId).run()
+  return c.json({ success: true })
 })
 
 // GET /jobs — list user's jobs with optional status filter
@@ -350,7 +465,7 @@ jobRoutes.post('/:id/prepare', async (c) => {
 jobRoutes.put('/:id/status', async (c) => {
   const userId = c.get('userId')
   const { status } = await c.req.json()
-  const valid = ['new', 'scored', 'ready', 'applied', 'needs_manual', 'expired', 'low_fit']
+  const valid = ['new', 'scored', 'ready', 'applied', 'needs_manual', 'expired', 'low_fit', 'flagged']
   if (!valid.includes(status)) return c.json({ error: 'Invalid status' }, 400)
 
   await c.env.DB.prepare(
