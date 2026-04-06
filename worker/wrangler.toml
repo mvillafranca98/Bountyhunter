@@ -24,10 +24,11 @@ bucket_name = "bountyhunter-storage"
 binding = "JOB_QUEUE"
 queue = "bountyhunter-job-queue"
 
-[[queues.consumers]]
-queue = "bountyhunter-job-queue"
-max_batch_size = 5
-max_batch_timeout = 30
+# Consumer already registered — omit to avoid "already has a consumer" deploy error
+# [[queues.consumers]]
+# queue = "bountyhunter-job-queue"
+# max_batch_size = 5
+# max_batch_timeout = 30
 
 # ─── Secrets (set via `wrangler secret put <NAME>`) ────────────────────────────
 # JWT_SECRET         — random 32+ char string
