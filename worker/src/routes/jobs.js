@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js'
 import { generateId } from '../lib/crypto.js'
 import { scoreJobFit, tailorResume, generateCoverLetter, generateSampleJobs } from '../lib/claude.js'
 import { fetchUserPreferences } from '../lib/preferences.js'
+import { markdownToOOXML, buildDocx } from '../lib/docx.js'
 
 export const jobRoutes = new Hono()
 jobRoutes.use('*', requireAuth)
@@ -196,6 +197,77 @@ async function fetchArbeitnow(keywords) {
   }))
 }
 
+// ─── Helper: fetch from RemoteOK (free, no key) ─────────────────────────────
+async function fetchRemoteOK(keywords) {
+  const res = await fetch('https://remoteok.com/api', {
+    headers: { 'User-Agent': 'BountyHunter/1.0' }
+  })
+  if (!res.ok) throw new Error(`RemoteOK API returned ${res.status}`)
+  const json = await res.json()
+  // First element is metadata, skip it. Filter by keywords in title/description
+  const kw = keywords.toLowerCase()
+  return json
+    .filter(job => job.id && (
+      (job.position || '').toLowerCase().includes(kw) ||
+      (job.description || '').toLowerCase().includes(kw) ||
+      (job.tags || []).some(t => t.toLowerCase().includes(kw))
+    ))
+    .slice(0, 5)
+    .map(job => ({
+      title: job.position,
+      company: job.company,
+      location: job.location || 'Remote',
+      url: job.url || `https://remoteok.com/l/${job.id}`,
+      description: cleanDescription(job.description),
+      source: 'remoteok',
+      external_id: String(job.id),
+      salary: job.salary_min && job.salary_max ? `$${job.salary_min}-$${job.salary_max}` : null,
+      posted_at: job.date || null,
+    }))
+}
+
+// ─── Helper: fetch from The Muse (free, no key) ─────────────────────────────
+async function fetchTheMuse(keywords) {
+  const res = await fetch(
+    `https://www.themuse.com/api/public/jobs?page=1&descending=true&category=${encodeURIComponent(keywords)}`
+  )
+  if (!res.ok) throw new Error(`The Muse API returned ${res.status}`)
+  const json = await res.json()
+  return (json.results || []).slice(0, 5).map(job => ({
+    title: job.name,
+    company: job.company?.name || '',
+    location: (job.locations || []).map(l => l.name).join(', ') || 'Various',
+    url: job.refs?.landing_page || `https://www.themuse.com/jobs/${job.id}`,
+    description: cleanDescription(job.contents),
+    source: 'themuse',
+    external_id: String(job.id),
+    salary: null,
+    posted_at: job.publication_date || null,
+  }))
+}
+
+// ─── Helper: fetch from Jobicy (free, no key) ───────────────────────────────
+async function fetchJobicy(keywords) {
+  const res = await fetch(
+    `https://jobicy.com/api/v2/remote-jobs?count=5&tag=${encodeURIComponent(keywords)}`
+  )
+  if (!res.ok) throw new Error(`Jobicy API returned ${res.status}`)
+  const json = await res.json()
+  return (json.jobs || []).slice(0, 5).map(job => ({
+    title: job.jobTitle,
+    company: job.companyName,
+    location: job.jobGeo || 'Remote',
+    url: job.url,
+    description: cleanDescription(job.jobDescription),
+    source: 'jobicy',
+    external_id: String(job.id),
+    salary: job.annualSalaryMin && job.annualSalaryMax
+      ? `$${job.annualSalaryMin}-$${job.annualSalaryMax}`
+      : null,
+    posted_at: job.pubDate || null,
+  }))
+}
+
 // ─── Helper: deduplicate jobs by title+company ────────────────────────────────
 function deduplicateJobs(jobs) {
   const seen = new Set()
@@ -226,6 +298,9 @@ jobRoutes.post('/real-search', async (c) => {
   const sourceFetchers = [
     { name: 'remotive', fn: () => fetchRemotive(keywords) },
     { name: 'arbeitnow', fn: () => fetchArbeitnow(keywords) },
+    { name: 'remoteok', fn: () => fetchRemoteOK(keywords) },
+    { name: 'themuse', fn: () => fetchTheMuse(keywords) },
+    { name: 'jobicy', fn: () => fetchJobicy(keywords) },
   ]
   if (hasRapidApi) {
     sourceFetchers.push({ name: 'jsearch', fn: () => fetchJSearch(keywords, c.env.RAPIDAPI_KEY) })
@@ -248,7 +323,7 @@ jobRoutes.post('/real-search', async (c) => {
   })
 
   // Deduplicate and limit
-  allJobs = deduplicateJobs(allJobs).slice(0, 10)
+  allJobs = deduplicateJobs(allJobs).slice(0, 15)
 
   if (!allJobs.length) {
     return c.json({ jobs: [], sources, message: `No jobs found for "${keywords}"` })
@@ -346,7 +421,8 @@ jobRoutes.post('/real-search', async (c) => {
 
   // Build summary message
   const okSources = sources.filter(s => s.status === 'ok' && s.count > 0)
-  const sourceNames = okSources.map(s => s.name === 'jsearch' ? 'Indeed/LinkedIn' : s.name.charAt(0).toUpperCase() + s.name.slice(1))
+  const displayNames = { jsearch: 'Indeed/LinkedIn', remoteok: 'RemoteOK', themuse: 'The Muse', jobicy: 'Jobicy' }
+  const sourceNames = okSources.map(s => displayNames[s.name] || s.name.charAt(0).toUpperCase() + s.name.slice(1))
   const sourceMsg = sourceNames.length ? ` from ${sourceNames.join(', ')}` : ''
 
   return c.json({
@@ -422,6 +498,47 @@ jobRoutes.get('/:id', async (c) => {
       ...job,
       fit_reasoning: job.fit_reasoning ? JSON.parse(job.fit_reasoning) : null,
     }
+  })
+})
+
+// GET /jobs/:id/resume-docx — download tailored resume as .docx
+jobRoutes.get('/:id/resume-docx', async (c) => {
+  const userId = c.get('userId')
+  const id = c.req.param('id')
+
+  // Get the tailored resume for this job
+  const version = await c.env.DB.prepare(
+    'SELECT * FROM resume_versions WHERE job_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1'
+  ).bind(id, userId).first()
+
+  if (!version) {
+    return c.json({ error: 'No tailored resume found. Click "Prepare" first.' }, 404)
+  }
+
+  const resumeText = version.resume_text || ''
+
+  // Get user info for the header
+  const user = await c.env.DB.prepare(
+    'SELECT first_name, last_name, email, location FROM users WHERE id = ?'
+  ).bind(userId).first()
+
+  const fullName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Candidate'
+  const email = user?.email || ''
+  const location = user?.location || ''
+
+  // Convert markdown to OOXML paragraphs
+  const paragraphs = markdownToOOXML(resumeText, fullName, email, location)
+
+  // Build minimal .docx (OOXML in a ZIP container)
+  const docxBuffer = await buildDocx(paragraphs)
+
+  const fileName = `${fullName.replace(/\s+/g, '_')}_Resume.docx`
+
+  return new Response(docxBuffer, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="${fileName}"`,
+    },
   })
 })
 

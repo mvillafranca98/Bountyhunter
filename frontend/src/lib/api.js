@@ -64,6 +64,7 @@ export const jobsApi = {
   updateStatus: (id, status) => api.put(`/jobs/${id}/status`, { status }),
   flag: (id) => api.put(`/jobs/${id}/flag`),
   importUrl: (data) => api.post('/jobs/import-url', data, { timeout: 60000 }),
+  downloadResume: (id) => api.get(`/jobs/${id}/resume-docx`, { responseType: 'blob' }),
 }
 
 // ─── Applications ──────────────────────────────────────────────────────────────

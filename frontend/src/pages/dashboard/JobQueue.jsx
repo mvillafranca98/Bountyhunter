@@ -36,6 +36,7 @@ export default function JobQueue() {
   const [loading, setLoading] = useState(false)
   const [preparing, setPreparing] = useState(false)
   const [applying, setApplying] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   const load = async (status) => {
     setLoading(true)
@@ -98,6 +99,29 @@ export default function JobQueue() {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
       setApplying(false)
+    }
+  }
+
+  const downloadDocx = async (jobId) => {
+    setDownloading(true)
+    try {
+      const { data, headers } = await jobsApi.downloadResume(jobId)
+      const blob = new Blob([data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const disposition = headers['content-disposition'] || ''
+      a.download = disposition.match(/filename="(.+)"/)?.[1] || 'Resume.docx'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to download resume')
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -194,7 +218,16 @@ export default function JobQueue() {
                 {selected.prepared && (
                   <div className="space-y-3">
                     <div className="bg-surface-900 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Tailored Resume (preview)</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Tailored Resume (preview)</p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); downloadDocx(job.id) }}
+                          disabled={downloading}
+                          className="btn-ghost text-xs flex items-center gap-1"
+                        >
+                          {downloading ? 'Downloading...' : 'Download .docx'}
+                        </button>
+                      </div>
                       <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
                         {selected.prepared.tailored_resume?.slice(0, 800)}…
                       </pre>
