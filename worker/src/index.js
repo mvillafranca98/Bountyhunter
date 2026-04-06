@@ -20,6 +20,7 @@ app.use('*', cors({
       'http://localhost:5175',
       'https://bountyhunter.pages.dev',
       'https://bountyhunter-18j.pages.dev',
+      'https://bountyhunter-app.a-mencias99.workers.dev',
       c.env?.CORS_ORIGIN,
     ].filter(Boolean)
     return allowed.includes(origin) ? origin : allowed[0]
