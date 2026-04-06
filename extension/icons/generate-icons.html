@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate BountyHunter Icons</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #1a1a2e;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 20px;
+    }
+    h1 { color: #7c5cfc; }
+    p { color: #888; font-size: 14px; }
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <h1>BountyHunter Icon Generator</h1>
+  <p>Icons will download automatically. Move them to the extension/icons/ folder.</p>
+  <canvas id="c"></canvas>
+  <script>
+    [16, 48, 128].forEach(size => {
+      const c = document.getElementById('c')
+      c.width = c.height = size
+      const ctx = c.getContext('2d')
+      // Purple circle background
+      ctx.fillStyle = '#7c5cfc'
+      ctx.beginPath()
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2)
+      ctx.fill()
+      // White "BH" text
+      ctx.fillStyle = '#fff'
+      ctx.font = `bold ${size * 0.45}px Arial`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('BH', size / 2, size / 2)
+      // Download
+      const a = document.createElement('a')
+      a.download = `icon${size}.png`
+      a.href = c.toDataURL()
+      a.click()
+    })
+  </script>
+</body>
+</html>

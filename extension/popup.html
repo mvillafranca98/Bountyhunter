@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360">
+  <title>BountyHunter</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 360px;
+      min-height: 200px;
+      background: #0f0f1a;
+      color: #e2e2e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid rgba(124, 92, 252, 0.15);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: #7c5cfc;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 11px;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-text {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-text span {
+      color: #7c5cfc;
+    }
+
+    .settings-btn {
+      background: none;
+      border: none;
+      color: #6b6b80;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .settings-btn:hover {
+      color: #7c5cfc;
+      background: rgba(124, 92, 252, 0.1);
+    }
+
+    /* Content area */
+    .content {
+      padding: 20px;
+    }
+
+    /* Current tab URL */
+    .tab-url {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 16px;
+      font-size: 11px;
+      color: #8888a0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tab-url::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #7c5cfc;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    /* Login form */
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #8888a0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: #e2e2e8;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      border-color: #7c5cfc;
+      background: rgba(124, 92, 252, 0.05);
+    }
+
+    .form-group input::placeholder {
+      color: #4a4a60;
+    }
+
+    /* Buttons */
+    .btn-primary {
+      width: 100%;
+      padding: 12px 16px;
+      background: #7c5cfc;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 4px;
+    }
+
+    .btn-primary:hover {
+      background: #6a48e8;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(124, 92, 252, 0.35);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Import button (large) */
+    .btn-import {
+      width: 100%;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #7c5cfc 0%, #6344e0 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      letter-spacing: -0.2px;
+    }
+
+    .btn-import:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(124, 92, 252, 0.4);
+    }
+
+    .btn-import:active {
+      transform: translateY(0);
+    }
+
+    .btn-import:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-import svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Status area */
+    .status {
+      margin-top: 16px;
+      display: none;
+    }
+
+    .status.visible {
+      display: block;
+    }
+
+    .status-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      background: rgba(124, 92, 252, 0.08);
+      border: 1px solid rgba(124, 92, 252, 0.15);
+      border-radius: 10px;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(124, 92, 252, 0.2);
+      border-top-color: #7c5cfc;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .status-success {
+      padding: 14px 16px;
+      background: rgba(52, 211, 153, 0.08);
+      border: 1px solid rgba(52, 211, 153, 0.15);
+      border-radius: 10px;
+    }
+
+    .status-success .title {
+      font-weight: 600;
+      color: #34d399;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .status-success .job-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .status-success .job-company {
+      font-size: 12px;
+      color: #8888a0;
+      margin-bottom: 10px;
+    }
+
+    .fit-score {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .fit-score.high {
+      background: rgba(52, 211, 153, 0.12);
+      color: #34d399;
+    }
+
+    .fit-score.medium {
+      background: rgba(251, 191, 36, 0.12);
+      color: #fbbf24;
+    }
+
+    .fit-score.low {
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
+    }
+
+    .status-error {
+      padding: 14px 16px;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.15);
+      border-radius: 10px;
+      color: #ef4444;
+      font-size: 12px;
+    }
+
+    /* User info footer */
+    .user-info {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .user-email {
+      font-size: 11px;
+      color: #6b6b80;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 220px;
+    }
+
+    .user-email::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #34d399;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .logout-btn {
+      background: none;
+      border: none;
+      color: #6b6b80;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .logout-btn:hover {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.08);
+    }
+
+    /* Settings panel */
+    .settings-panel {
+      display: none;
+      padding: 20px;
+    }
+
+    .settings-panel.visible {
+      display: block;
+    }
+
+    .settings-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .settings-back {
+      background: none;
+      border: none;
+      color: #7c5cfc;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .settings-back:hover {
+      background: rgba(124, 92, 252, 0.1);
+    }
+
+    .settings-saved {
+      font-size: 11px;
+      color: #34d399;
+      margin-top: 8px;
+      display: none;
+    }
+
+    /* Login error */
+    .login-error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 8px;
+      display: none;
+    }
+
+    /* Section visibility */
+    .section-login,
+    .section-main {
+      display: none;
+    }
+
+    .section-login.visible,
+    .section-main.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">BH</div>
+      <div class="logo-text">Bounty<span>Hunter</span></div>
+    </div>
+    <button class="settings-btn" id="settingsToggle" title="Settings">&#9881;</button>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-title">
+      <button class="settings-back" id="settingsBack">&larr; Back</button>
+      Settings
+    </div>
+    <div class="form-group">
+      <label>API URL</label>
+      <input type="url" id="apiUrlInput" placeholder="https://bountyhunter-worker.a-mencias99.workers.dev">
+    </div>
+    <button class="btn-primary" id="saveApiUrl">Save</button>
+    <div class="settings-saved" id="settingsSaved">Settings saved!</div>
+  </div>
+
+  <!-- Main content -->
+  <div class="content" id="mainContent">
+    <div class="tab-url" id="tabUrl">Detecting page...</div>
+
+    <!-- Login section -->
+    <div class="section-login" id="sectionLogin">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="loginPassword" placeholder="Your password" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" id="loginBtn">Log in</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
+
+    <!-- Import section (logged in) -->
+    <div class="section-main" id="sectionMain">
+      <button class="btn-import" id="importBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Import this job
+      </button>
+
+      <!-- Status area -->
+      <div class="status" id="statusArea">
+        <!-- Filled dynamically -->
+      </div>
+
+      <!-- User info -->
+      <div class="user-info">
+        <span class="user-email" id="userEmail"></span>
+        <button class="logout-btn" id="logoutBtn">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

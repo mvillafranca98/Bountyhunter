@@ -268,6 +268,109 @@ async function fetchJobicy(keywords) {
   }))
 }
 
+// ─── Helper: fetch from HackerNews "Who's Hiring" ──────────────────────────
+async function fetchHackerNews(keywords) {
+  try {
+    // Find the latest "Who is hiring" thread
+    const threadRes = await fetch(
+      'https://hn.algolia.com/api/v1/search?tags=ask_hn&query=who+is+hiring&hitsPerPage=1'
+    )
+    if (!threadRes.ok) throw new Error(`HN thread search returned ${threadRes.status}`)
+    const threadJson = await threadRes.json()
+    const objectID = threadJson.hits?.[0]?.objectID
+    if (!objectID) return []
+
+    // Fetch comments from that thread
+    const commentsRes = await fetch(
+      `https://hn.algolia.com/api/v1/search?tags=comment,story_${objectID}&hitsPerPage=100`
+    )
+    if (!commentsRes.ok) throw new Error(`HN comments returned ${commentsRes.status}`)
+    const commentsJson = await commentsRes.json()
+
+    const lowerKeywords = keywords.toLowerCase().split(/[\s,]+/).filter(Boolean)
+
+    const matched = (commentsJson.hits || []).filter(hit => {
+      const text = (hit.comment_text || '').toLowerCase()
+      return lowerKeywords.some(kw => text.includes(kw))
+    })
+
+    return matched.slice(0, 10).map(hit => {
+      const text = hit.comment_text || ''
+      const parts = text.split(/\n/)[0].split('|').map(s => s.replace(/<[^>]*>/g, '').trim())
+      const company = parts[0] || 'Unknown'
+      const title = parts.length > 2 ? parts[1] : 'See posting'
+      const locationPart = parts.find(p => /remote/i.test(p)) || (parts.length > 2 ? parts[2] : '')
+      const urlMatch = text.match(/href="([^"]+)"/) || text.match(/(https?:\/\/[^\s<"]+)/)
+      const url = urlMatch ? urlMatch[1] : `https://news.ycombinator.com/item?id=${hit.objectID}`
+
+      return {
+        title,
+        company,
+        location: locationPart || '',
+        url,
+        description: cleanDescription(text).slice(0, 2000),
+        source: 'hackernews',
+        external_id: String(hit.objectID),
+        salary: null,
+        posted_at: hit.created_at,
+      }
+    })
+  } catch (err) {
+    console.error('HackerNews fetch failed:', err.message)
+    return []
+  }
+}
+
+// ─── Helper: fetch from Himalayas (free, no key) ───────────────────────────
+async function fetchHimalayas(keywords) {
+  try {
+    const res = await fetch(
+      `https://himalayas.app/jobs/api?limit=10&q=${encodeURIComponent(keywords)}`
+    )
+    if (!res.ok) throw new Error(`Himalayas API returned ${res.status}`)
+    const json = await res.json()
+    return (json.jobs || []).map(job => ({
+      title: job.title,
+      company: job.companyName,
+      location: job.locationRestrictions?.join(', ') || 'Remote',
+      url: `https://himalayas.app/jobs/${job.slug}`,
+      description: cleanDescription(job.description),
+      source: 'himalayas',
+      external_id: String(job.id),
+      salary: job.minSalary && job.maxSalary ? `$${job.minSalary}-${job.maxSalary}` : null,
+      posted_at: job.pubDate || null,
+    }))
+  } catch (err) {
+    console.error('Himalayas fetch failed:', err.message)
+    return []
+  }
+}
+
+// ─── Helper: fetch from SerpAPI Google Jobs ──────────────────────────────────
+async function fetchGoogleJobs(keywords, serpApiKey) {
+  try {
+    const res = await fetch(
+      `https://serpapi.com/search.json?engine=google_jobs&q=${encodeURIComponent(keywords)}&api_key=${serpApiKey}`
+    )
+    if (!res.ok) throw new Error(`SerpAPI returned ${res.status}`)
+    const json = await res.json()
+    return (json.jobs_results || []).slice(0, 10).map(job => ({
+      title: job.title,
+      company: job.company_name,
+      location: job.location,
+      url: job.apply_options?.[0]?.link || job.share_link || job.related_links?.[0]?.link,
+      description: cleanDescription(job.description),
+      source: 'google_jobs',
+      external_id: job.job_id,
+      salary: job.detected_extensions?.salary || null,
+      posted_at: job.detected_extensions?.posted_at || null,
+    }))
+  } catch (err) {
+    console.error('Google Jobs fetch failed:', err.message)
+    return []
+  }
+}
+
 // ─── Helper: deduplicate jobs by title+company ────────────────────────────────
 function deduplicateJobs(jobs) {
   const seen = new Set()
@@ -293,14 +396,18 @@ jobRoutes.post('/real-search', async (c) => {
     keywords = roles.results.map(r => r.role_title).join(', ') || 'software engineer'
   }
 
-  // Build source fetchers — always include free sources, add JSearch if key available
+  // Build source fetchers — always include free sources, add premium sources if keys available
   const hasRapidApi = c.env.RAPIDAPI_KEY && !c.env.RAPIDAPI_KEY.startsWith('REPLACE_')
+  const hasSerpApi = c.env.SERPAPI_KEY && !c.env.SERPAPI_KEY.startsWith('REPLACE_')
   const sourceFetchers = [
+    ...(hasSerpApi ? [{ name: 'google_jobs', fn: () => fetchGoogleJobs(keywords, c.env.SERPAPI_KEY) }] : []),
     { name: 'remotive', fn: () => fetchRemotive(keywords) },
     { name: 'arbeitnow', fn: () => fetchArbeitnow(keywords) },
     { name: 'remoteok', fn: () => fetchRemoteOK(keywords) },
     { name: 'themuse', fn: () => fetchTheMuse(keywords) },
     { name: 'jobicy', fn: () => fetchJobicy(keywords) },
+    { name: 'hackernews', fn: () => fetchHackerNews(keywords) },
+    { name: 'himalayas', fn: () => fetchHimalayas(keywords) },
   ]
   if (hasRapidApi) {
     sourceFetchers.push({ name: 'jsearch', fn: () => fetchJSearch(keywords, c.env.RAPIDAPI_KEY) })
@@ -421,7 +528,7 @@ jobRoutes.post('/real-search', async (c) => {
 
   // Build summary message
   const okSources = sources.filter(s => s.status === 'ok' && s.count > 0)
-  const displayNames = { jsearch: 'Indeed/LinkedIn', remoteok: 'RemoteOK', themuse: 'The Muse', jobicy: 'Jobicy' }
+  const displayNames = { google_jobs: 'Google Jobs', jsearch: 'Indeed/LinkedIn', remoteok: 'RemoteOK', themuse: 'The Muse', jobicy: 'Jobicy', hackernews: 'HackerNews', himalayas: 'Himalayas' }
   const sourceNames = okSources.map(s => displayNames[s.name] || s.name.charAt(0).toUpperCase() + s.name.slice(1))
   const sourceMsg = sourceNames.length ? ` from ${sourceNames.join(', ')}` : ''
 
