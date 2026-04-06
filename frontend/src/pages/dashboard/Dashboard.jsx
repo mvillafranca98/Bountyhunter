@@ -147,7 +147,7 @@ export default function Dashboard() {
             {findingReal ? (
               <>
                 <span className="w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-                Finding real jobs…
+                Finding & scoring real jobs… (~30s)
               </>
             ) : (
               '\uD83D\uDD0D Find real jobs'
