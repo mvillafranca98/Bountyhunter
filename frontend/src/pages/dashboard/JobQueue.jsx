@@ -39,6 +39,10 @@ export default function JobQueue() {
   const [preparing, setPreparing] = useState(false)
   const [applying, setApplying] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [notes, setNotes] = useState([])
+  const [timeline, setTimeline] = useState([])
+  const [noteText, setNoteText] = useState('')
+  const [notesLoading, setNotesLoading] = useState(false)
 
   const load = async (status, sort) => {
     setLoading(true)
@@ -57,6 +61,36 @@ export default function JobQueue() {
   }
 
   useEffect(() => { load(activeStatus, sortBy) }, [activeStatus, sortBy])
+
+  // Load notes + timeline when a job is selected
+  useEffect(() => {
+    if (!selected) { setNotes([]); setTimeline([]); return }
+    setNotesLoading(true)
+    Promise.all([
+      jobsApi.getNotes(selected.id),
+      jobsApi.getTimeline(selected.id),
+    ]).then(([notesRes, timelineRes]) => {
+      setNotes(notesRes.data.notes || [])
+      setTimeline(timelineRes.data.timeline || [])
+    }).catch(() => {}).finally(() => setNotesLoading(false))
+  }, [selected?.id])
+
+  const addNote = async () => {
+    if (!noteText.trim() || !selected) return
+    try {
+      const { data } = await jobsApi.addNote(selected.id, noteText)
+      setNotes(prev => [data.note, ...prev])
+      setNoteText('')
+      toast.success('Note added')
+    } catch { toast.error('Failed to add note') }
+  }
+
+  const deleteNote = async (noteId) => {
+    try {
+      await jobsApi.deleteNote(selected.id, noteId)
+      setNotes(prev => prev.filter(n => n.id !== noteId))
+    } catch { toast.error('Failed to delete note') }
+  }
 
   const prepareJob = async (job) => {
     setPreparing(true)
@@ -258,6 +292,55 @@ export default function JobQueue() {
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Notes */}
+                <div className="bg-surface-900 rounded-lg p-3 space-y-3" onClick={e => e.stopPropagation()}>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Notes</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={noteText}
+                      onChange={e => setNoteText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addNote()}
+                      placeholder="Add a note..."
+                      className="input text-sm flex-1"
+                    />
+                    <button onClick={addNote} disabled={!noteText.trim()} className="btn-primary text-xs px-3">Add</button>
+                  </div>
+                  {notesLoading && <p className="text-xs text-gray-500">Loading...</p>}
+                  {notes.length > 0 && (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                      {notes.map(n => (
+                        <div key={n.id} className="flex items-start gap-2 bg-surface-800 rounded px-2.5 py-1.5">
+                          <p className="text-xs text-gray-300 flex-1">{n.content}</p>
+                          <span className="text-xs text-gray-600 shrink-0">{new Date(n.created_at).toLocaleDateString()}</span>
+                          <button onClick={() => deleteNote(n.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0">x</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Timeline */}
+                {timeline.length > 0 && (
+                  <div className="bg-surface-900 rounded-lg p-3 space-y-2" onClick={e => e.stopPropagation()}>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Timeline</p>
+                    <div className="space-y-0 relative pl-4 border-l border-surface-600 max-h-48 overflow-y-auto">
+                      {timeline.map((event, i) => (
+                        <div key={i} className="relative pb-3 last:pb-0">
+                          <div className={`absolute -left-[calc(1rem+4.5px)] top-1 w-2.5 h-2.5 rounded-full ${
+                            event.type === 'created' ? 'bg-gray-400' :
+                            event.type === 'prepared' ? 'bg-purple-400' :
+                            event.type === 'applied' ? 'bg-green-400' :
+                            event.type === 'note' ? 'bg-blue-400' : 'bg-gray-500'
+                          }`} />
+                          <p className="text-xs text-gray-300">{event.detail}</p>
+                          <p className="text-xs text-gray-600">{new Date(event.date).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

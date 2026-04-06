@@ -8,7 +8,9 @@ import { applicationRoutes } from './routes/applications.js'
 import { questionRoutes } from './routes/questions.js'
 import { dashboardRoutes } from './routes/dashboard.js'
 import { storageRoutes } from './routes/storage.js'
+import { alertRoutes } from './routes/alerts.js'
 import { handleQueue } from './queue.js'
+import { ensureSavedSearchesTable } from './lib/savedSearches.js'
 
 const app = new Hono()
 
@@ -40,6 +42,7 @@ app.route('/applications', applicationRoutes)
 app.route('/questions', questionRoutes)
 app.route('/dashboard', dashboardRoutes)
 app.route('/storage', storageRoutes)
+app.route('/alerts', alertRoutes)
 
 app.get('/health', (c) => c.json({ status: 'ok', env: c.env?.ENVIRONMENT || 'unknown' }))
 
@@ -53,4 +56,27 @@ app.onError((err, c) => {
 export default {
   fetch: app.fetch,
   queue: handleQueue,
+  async scheduled(event, env, ctx) {
+    const db = env.DB
+    await ensureSavedSearchesTable(db)
+
+    const alerts = await db.prepare(
+      'SELECT * FROM saved_searches WHERE is_active = 1'
+    ).all()
+
+    for (const alert of alerts.results || []) {
+      await env.JOB_QUEUE.send({
+        type: 'SEARCH_JOBS',
+        userId: alert.user_id,
+        keywords: alert.keywords,
+        source: 'all',
+      })
+
+      await db.prepare(
+        "UPDATE saved_searches SET last_run_at = datetime('now') WHERE id = ?"
+      ).bind(alert.id).run()
+    }
+
+    console.log(`Cron: processed ${(alerts.results || []).length} job alerts`)
+  },
 }

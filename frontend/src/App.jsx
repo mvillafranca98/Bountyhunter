@@ -10,6 +10,7 @@ import Applications from './pages/dashboard/Applications'
 import QuestionBank from './pages/dashboard/QuestionBank'
 import Profile from './pages/dashboard/Profile'
 import ResumeStudio from './pages/dashboard/ResumeStudio'
+import Analytics from './pages/dashboard/Analytics'
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="applications" element={<Applications />} />
           <Route path="questions"   element={<QuestionBank />} />
           <Route path="resume"      element={<ResumeStudio />} />
+          <Route path="analytics"   element={<Analytics />} />
           <Route path="profile"     element={<Profile />} />
         </Route>
 

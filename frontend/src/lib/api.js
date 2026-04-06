@@ -50,6 +50,7 @@ export const resumeApi = {
   }),
   get: () => api.get('/resume'),
   getAll: () => api.get('/resume/all'),
+  importLinkedIn: (data) => api.post('/resume/import-linkedin', data, { timeout: 60000 }),
 }
 
 // ─── Jobs ──────────────────────────────────────────────────────────────────────
@@ -65,6 +66,10 @@ export const jobsApi = {
   flag: (id) => api.put(`/jobs/${id}/flag`),
   importUrl: (data) => api.post('/jobs/import-url', data, { timeout: 60000 }),
   downloadResume: (id) => api.get(`/jobs/${id}/resume-docx`, { responseType: 'blob' }),
+  getNotes: (id) => api.get(`/jobs/${id}/notes`),
+  addNote: (id, content) => api.post(`/jobs/${id}/notes`, { content }),
+  deleteNote: (id, noteId) => api.delete(`/jobs/${id}/notes/${noteId}`),
+  getTimeline: (id) => api.get(`/jobs/${id}/timeline`),
 }
 
 // ─── Applications ──────────────────────────────────────────────────────────────
@@ -82,6 +87,14 @@ export const questionsApi = {
   update: (id, answer) => api.put(`/questions/${id}`, { answer }),
   delete: (id) => api.delete(`/questions/${id}`),
   generate: (question, job_context) => api.post('/questions/generate', { question, job_context }),
+}
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+export const alertsApi = {
+  list: () => api.get('/alerts'),
+  create: (data) => api.post('/alerts', data),
+  delete: (id) => api.delete(`/alerts/${id}`),
+  toggle: (id) => api.put(`/alerts/${id}/toggle`),
 }
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────

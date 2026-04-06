@@ -758,6 +758,103 @@ ${textContent}`
   })
 })
 
+// GET /jobs/:id/notes — get notes for a job
+jobRoutes.get('/:id/notes', async (c) => {
+  const userId = c.get('userId')
+  const id = c.req.param('id')
+  await c.env.DB.exec(`CREATE TABLE IF NOT EXISTS job_notes (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+  const notes = await c.env.DB.prepare(
+    'SELECT * FROM job_notes WHERE job_id = ? AND user_id = ? ORDER BY created_at DESC'
+  ).bind(id, userId).all()
+  return c.json({ notes: notes.results })
+})
+
+// POST /jobs/:id/notes — add a note
+jobRoutes.post('/:id/notes', async (c) => {
+  const userId = c.get('userId')
+  const jobId = c.req.param('id')
+  const { content } = await c.req.json()
+  if (!content?.trim()) return c.json({ error: 'Note content is required' }, 400)
+
+  await c.env.DB.exec(`CREATE TABLE IF NOT EXISTS job_notes (
+    id TEXT PRIMARY KEY, job_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now'))
+  )`)
+
+  const id = crypto.randomUUID()
+  await c.env.DB.prepare(
+    'INSERT INTO job_notes (id, job_id, user_id, content) VALUES (?, ?, ?, ?)'
+  ).bind(id, jobId, userId, content.trim()).run()
+
+  return c.json({ success: true, note: { id, job_id: jobId, content: content.trim(), created_at: new Date().toISOString() } })
+})
+
+// DELETE /jobs/:id/notes/:noteId — delete a note
+jobRoutes.delete('/:id/notes/:noteId', async (c) => {
+  const userId = c.get('userId')
+  const noteId = c.req.param('noteId')
+  await c.env.DB.prepare(
+    'DELETE FROM job_notes WHERE id = ? AND user_id = ?'
+  ).bind(noteId, userId).run()
+  return c.json({ success: true })
+})
+
+// GET /jobs/:id/timeline — get status history
+jobRoutes.get('/:id/timeline', async (c) => {
+  const userId = c.get('userId')
+  const id = c.req.param('id')
+
+  // Build timeline from multiple sources
+  const timeline = []
+
+  // Job creation
+  const job = await c.env.DB.prepare(
+    'SELECT created_at, status, title FROM jobs WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first()
+  if (job) {
+    timeline.push({ type: 'created', date: job.created_at, detail: `Found: ${job.title}` })
+  }
+
+  // Resume versions (prepare events)
+  const versions = await c.env.DB.prepare(
+    'SELECT created_at FROM resume_versions WHERE job_id = ? AND user_id = ? ORDER BY created_at'
+  ).bind(id, userId).all()
+  for (const v of versions.results || []) {
+    timeline.push({ type: 'prepared', date: v.created_at, detail: 'Resume tailored' })
+  }
+
+  // Applications
+  const apps = await c.env.DB.prepare(
+    'SELECT created_at, status FROM applications WHERE job_id = ? AND user_id = ? ORDER BY created_at'
+  ).bind(id, userId).all()
+  for (const a of apps.results || []) {
+    timeline.push({ type: 'applied', date: a.created_at, detail: `Applied (${a.status})` })
+  }
+
+  // Notes
+  await c.env.DB.exec(`CREATE TABLE IF NOT EXISTS job_notes (
+    id TEXT PRIMARY KEY, job_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now'))
+  )`)
+  const notes = await c.env.DB.prepare(
+    'SELECT created_at, content FROM job_notes WHERE job_id = ? AND user_id = ? ORDER BY created_at'
+  ).bind(id, userId).all()
+  for (const n of notes.results || []) {
+    timeline.push({ type: 'note', date: n.created_at, detail: n.content.slice(0, 100) })
+  }
+
+  // Sort by date descending
+  timeline.sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  return c.json({ timeline })
+})
+
 // PUT /jobs/:id/status
 jobRoutes.put('/:id/status', async (c) => {
   const userId = c.get('userId')

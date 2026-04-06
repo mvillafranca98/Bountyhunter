@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { dashboardApi, jobsApi } from '../../lib/api'
+import { dashboardApi, jobsApi, alertsApi } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { toast } from 'react-toastify'
 
@@ -28,10 +28,52 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [importUrl, setImportUrl] = useState('')
   const [importingUrl, setImportingUrl] = useState(false)
+  const [alerts, setAlerts] = useState([])
+  const [alertKeywords, setAlertKeywords] = useState('')
+  const [creatingAlert, setCreatingAlert] = useState(false)
 
   useEffect(() => {
     dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
+    loadAlerts()
   }, [])
+
+  const loadAlerts = () => {
+    alertsApi.list().then(r => setAlerts(r.data.alerts || [])).catch(() => {})
+  }
+
+  const createAlert = async () => {
+    if (!alertKeywords.trim()) return
+    setCreatingAlert(true)
+    try {
+      const { data: r } = await alertsApi.create({ keywords: alertKeywords.trim() })
+      toast.success(r.message || 'Alert created!')
+      setAlertKeywords('')
+      loadAlerts()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create alert')
+    } finally {
+      setCreatingAlert(false)
+    }
+  }
+
+  const toggleAlert = async (id) => {
+    try {
+      await alertsApi.toggle(id)
+      setAlerts(prev => prev.map(a => a.id === id ? { ...a, is_active: a.is_active ? 0 : 1 } : a))
+    } catch {
+      toast.error('Failed to update alert')
+    }
+  }
+
+  const deleteAlert = async (id) => {
+    try {
+      await alertsApi.delete(id)
+      setAlerts(prev => prev.filter(a => a.id !== id))
+      toast.info('Alert deleted')
+    } catch {
+      toast.error('Failed to delete alert')
+    }
+  }
 
   const triggerSearch = async (e) => {
     e.preventDefault()
@@ -197,6 +239,57 @@ export default function Dashboard() {
             'Import job'
           )}
         </button>
+      </div>
+
+      {/* Job Alerts */}
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-white">Job Alerts</h3>
+          <span className="text-xs text-gray-500">Runs daily at 8 AM UTC</span>
+        </div>
+
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            className="input text-sm flex-1"
+            placeholder="e.g. AI developer remote"
+            value={alertKeywords}
+            onChange={e => setAlertKeywords(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && createAlert()}
+          />
+          <button
+            onClick={createAlert}
+            disabled={!alertKeywords.trim() || creatingAlert}
+            className="btn-primary text-sm px-3"
+          >
+            {creatingAlert ? 'Saving...' : 'Save alert'}
+          </button>
+        </div>
+
+        {alerts.length === 0 ? (
+          <p className="text-xs text-gray-600">No alerts yet. Save a search to get daily job updates.</p>
+        ) : (
+          <div className="space-y-2">
+            {alerts.map(a => (
+              <div key={a.id} className="flex items-center justify-between text-sm">
+                <div className="flex-1 min-w-0">
+                  <span className={a.is_active ? 'text-gray-300' : 'text-gray-600 line-through'}>{a.keywords}</span>
+                  {a.last_run_at && (
+                    <span className="text-xs text-gray-600 ml-2">Last run: {new Date(a.last_run_at).toLocaleDateString()}</span>
+                  )}
+                </div>
+                <div className="flex gap-2 ml-3 shrink-0">
+                  <button onClick={() => toggleAlert(a.id)} className="text-xs text-gray-500 hover:text-white">
+                    {a.is_active ? 'Pause' : 'Resume'}
+                  </button>
+                  <button onClick={() => deleteAlert(a.id)} className="text-xs text-red-500 hover:text-red-400">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Stats grid */}

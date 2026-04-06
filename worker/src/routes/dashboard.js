@@ -94,28 +94,68 @@ dashboardRoutes.get('/skills-gap', async (c) => {
   return c.json({ analysis })
 })
 
-// GET /dashboard/analytics — application performance stats
+// GET /dashboard/analytics — job search analytics
 dashboardRoutes.get('/analytics', async (c) => {
   const userId = c.get('userId')
 
-  const [totalApplied, avgFitApplied, blockerReasons, sourceBreakdown] = await Promise.all([
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ?').bind(userId).first(),
-    c.env.DB.prepare(
-      `SELECT AVG(j.fit_score) as avg_fit FROM applications a JOIN jobs j ON a.job_id = j.id WHERE a.user_id = ?`
-    ).bind(userId).first(),
-    c.env.DB.prepare(
-      'SELECT reason, COUNT(*) as count FROM blockers WHERE user_id = ? GROUP BY reason ORDER BY count DESC'
-    ).bind(userId).all(),
-    c.env.DB.prepare(
-      `SELECT j.source, COUNT(*) as count FROM applications a JOIN jobs j ON a.job_id = j.id
-       WHERE a.user_id = ? GROUP BY j.source`
-    ).bind(userId).all(),
-  ])
+  // Total jobs by status
+  const statusCounts = await c.env.DB.prepare(
+    'SELECT status, COUNT(*) as count FROM jobs WHERE user_id = ? GROUP BY status'
+  ).bind(userId).all()
+
+  // Total jobs by source
+  const sourceCounts = await c.env.DB.prepare(
+    'SELECT source, COUNT(*) as count FROM jobs WHERE user_id = ? GROUP BY source'
+  ).bind(userId).all()
+
+  // Average fit score
+  const avgScore = await c.env.DB.prepare(
+    'SELECT AVG(fit_score) as avg_score, MAX(fit_score) as max_score, MIN(fit_score) as min_score FROM jobs WHERE user_id = ? AND fit_score IS NOT NULL'
+  ).bind(userId).first()
+
+  // Applications count
+  const appCount = await c.env.DB.prepare(
+    'SELECT COUNT(*) as total FROM applications WHERE user_id = ?'
+  ).bind(userId).first()
+
+  // Jobs added per week (last 4 weeks)
+  const weeklyJobs = await c.env.DB.prepare(
+    `SELECT strftime('%Y-W%W', created_at) as week, COUNT(*) as count
+     FROM jobs WHERE user_id = ? AND created_at > datetime('now', '-28 days')
+     GROUP BY week ORDER BY week`
+  ).bind(userId).all()
+
+  // Score distribution (buckets: 0-25, 26-50, 51-75, 76-100)
+  const scoreDist = await c.env.DB.prepare(
+    `SELECT
+       SUM(CASE WHEN fit_score BETWEEN 0 AND 25 THEN 1 ELSE 0 END) as low,
+       SUM(CASE WHEN fit_score BETWEEN 26 AND 50 THEN 1 ELSE 0 END) as medium_low,
+       SUM(CASE WHEN fit_score BETWEEN 51 AND 75 THEN 1 ELSE 0 END) as medium_high,
+       SUM(CASE WHEN fit_score BETWEEN 76 AND 100 THEN 1 ELSE 0 END) as high
+     FROM jobs WHERE user_id = ? AND fit_score IS NOT NULL`
+  ).bind(userId).first()
+
+  // Top companies (most jobs from)
+  const topCompanies = await c.env.DB.prepare(
+    'SELECT company, COUNT(*) as count, AVG(fit_score) as avg_score FROM jobs WHERE user_id = ? AND company IS NOT NULL GROUP BY company ORDER BY count DESC LIMIT 5'
+  ).bind(userId).all()
 
   return c.json({
-    total_applied: totalApplied?.count || 0,
-    avg_fit_score_on_applied: avgFitApplied?.avg_fit ? Math.round(avgFitApplied.avg_fit) : null,
-    blocker_reasons: blockerReasons.results,
-    applications_by_source: sourceBreakdown.results,
+    status_breakdown: statusCounts.results,
+    source_breakdown: sourceCounts.results,
+    score_stats: {
+      average: Math.round(avgScore?.avg_score || 0),
+      highest: avgScore?.max_score || 0,
+      lowest: avgScore?.min_score || 0,
+    },
+    applications_total: appCount?.total || 0,
+    weekly_activity: weeklyJobs.results,
+    score_distribution: {
+      '0-25': scoreDist?.low || 0,
+      '26-50': scoreDist?.medium_low || 0,
+      '51-75': scoreDist?.medium_high || 0,
+      '76-100': scoreDist?.high || 0,
+    },
+    top_companies: topCompanies.results,
   })
 })

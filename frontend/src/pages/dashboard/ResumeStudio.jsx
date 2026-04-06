@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'react-toastify'
 import { resumeApi } from '../../lib/api'
 import StepResume from '../onboarding/steps/StepResume'
 
@@ -86,10 +87,38 @@ export default function ResumeStudio() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('master')
   const [showReupload, setShowReupload] = useState(false)
+  const [linkedInUrl, setLinkedInUrl] = useState('')
+  const [linkedInText, setLinkedInText] = useState('')
+  const [showPasteArea, setShowPasteArea] = useState(false)
+  const [importingLI, setImportingLI] = useState(false)
 
   const load = () => {
     setLoading(true)
     resumeApi.get().then(r => setResume(r.data.resume)).finally(() => setLoading(false))
+  }
+
+  const importLinkedIn = async () => {
+    setImportingLI(true)
+    try {
+      const { data } = await resumeApi.importLinkedIn({
+        url: linkedInUrl.trim() || undefined,
+        text: linkedInText.trim() || undefined,
+      })
+      toast.success(data.message || 'Profile imported!')
+      setLinkedInUrl('')
+      setLinkedInText('')
+      setShowPasteArea(false)
+      load()
+    } catch (err) {
+      if (err.response?.data?.needsManualPaste) {
+        setShowPasteArea(true)
+        toast.warn('Please paste your LinkedIn profile text manually')
+      } else {
+        toast.error(err.response?.data?.error || 'Import failed')
+      }
+    } finally {
+      setImportingLI(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -102,6 +131,41 @@ export default function ResumeStudio() {
         <h1 className="text-2xl font-bold text-white">Resume Studio</h1>
         <div className="card">
           <StepResume onComplete={() => { setShowReupload(false); load() }} />
+        </div>
+        <div className="relative flex items-center gap-3">
+          <div className="flex-1 border-t border-surface-600" />
+          <span className="text-xs text-gray-500 uppercase">or</span>
+          <div className="flex-1 border-t border-surface-600" />
+        </div>
+        <div className="card p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-white">Import from LinkedIn</h3>
+          <div className="space-y-2">
+            <input
+              type="url"
+              className="input text-sm"
+              placeholder="https://linkedin.com/in/your-profile"
+              value={linkedInUrl}
+              onChange={e => setLinkedInUrl(e.target.value)}
+            />
+            {showPasteArea && (
+              <>
+                <p className="text-xs text-yellow-400">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
+                <textarea
+                  className="input text-sm h-32"
+                  placeholder="Go to your LinkedIn profile → Select All (Cmd+A) → Copy (Cmd+C) → Paste here"
+                  value={linkedInText}
+                  onChange={e => setLinkedInText(e.target.value)}
+                />
+              </>
+            )}
+            <button
+              onClick={importLinkedIn}
+              disabled={importingLI || (!linkedInUrl.trim() && !linkedInText.trim())}
+              className="btn-primary text-sm w-full"
+            >
+              {importingLI ? 'Importing...' : 'Import from LinkedIn'}
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -118,6 +182,38 @@ export default function ResumeStudio() {
           <p className="text-gray-400 text-sm mt-1">{resume.original_filename} · uploaded {new Date(resume.created_at).toLocaleDateString()}</p>
         </div>
         <button onClick={() => setShowReupload(true)} className="btn-ghost text-sm">Replace resume</button>
+      </div>
+
+      {/* LinkedIn Import */}
+      <div className="card p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-white">Import from LinkedIn</h3>
+        <div className="space-y-2">
+          <input
+            type="url"
+            className="input text-sm"
+            placeholder="https://linkedin.com/in/your-profile"
+            value={linkedInUrl}
+            onChange={e => setLinkedInUrl(e.target.value)}
+          />
+          {showPasteArea && (
+            <>
+              <p className="text-xs text-yellow-400">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
+              <textarea
+                className="input text-sm h-32"
+                placeholder="Go to your LinkedIn profile → Select All (Cmd+A) → Copy (Cmd+C) → Paste here"
+                value={linkedInText}
+                onChange={e => setLinkedInText(e.target.value)}
+              />
+            </>
+          )}
+          <button
+            onClick={importLinkedIn}
+            disabled={importingLI || (!linkedInUrl.trim() && !linkedInText.trim())}
+            className="btn-primary text-sm w-full"
+          >
+            {importingLI ? 'Importing...' : 'Import from LinkedIn'}
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
