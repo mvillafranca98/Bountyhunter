@@ -1,0 +1,50 @@
+// Helper to fetch user job search preferences from the user_preferences table.
+// Returns a plain object safe to pass to scoreJobFit (returns defaults if no row exists).
+
+export async function fetchUserPreferences(db, userId) {
+  try {
+    // Ensure table exists (no-op after first call per isolate lifetime)
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id TEXT PRIMARY KEY,
+        work_style TEXT DEFAULT 'remote',
+        deal_breakers TEXT DEFAULT '[]',
+        target_industries TEXT DEFAULT '[]',
+        experience_level TEXT DEFAULT 'mid',
+        languages TEXT DEFAULT '["English"]',
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run()
+
+    const row = await db.prepare(
+      'SELECT * FROM user_preferences WHERE user_id = ?'
+    ).bind(userId).first()
+
+    if (!row) {
+      return {
+        work_style: 'any',
+        deal_breakers: [],
+        target_industries: [],
+        experience_level: null,
+        languages: [],
+      }
+    }
+
+    return {
+      work_style: row.work_style || 'any',
+      deal_breakers: JSON.parse(row.deal_breakers || '[]'),
+      target_industries: JSON.parse(row.target_industries || '[]'),
+      experience_level: row.experience_level || null,
+      languages: JSON.parse(row.languages || '[]'),
+    }
+  } catch (e) {
+    console.error('fetchUserPreferences error:', e.message)
+    return {
+      work_style: 'any',
+      deal_breakers: [],
+      target_industries: [],
+      experience_level: null,
+      languages: [],
+    }
+  }
+}

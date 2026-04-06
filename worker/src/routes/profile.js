@@ -87,6 +87,91 @@ profileRoutes.put('/salary', async (c) => {
   return c.json({ success: true })
 })
 
+// GET /profile/preferences — get job search preferences
+profileRoutes.get('/preferences', async (c) => {
+  const userId = c.get('userId')
+
+  // Ensure table exists (avoids needing a migration)
+  await c.env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      work_style TEXT DEFAULT 'remote',
+      deal_breakers TEXT DEFAULT '[]',
+      target_industries TEXT DEFAULT '[]',
+      experience_level TEXT DEFAULT 'mid',
+      languages TEXT DEFAULT '["English"]',
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `).run()
+
+  const row = await c.env.DB.prepare(
+    'SELECT * FROM user_preferences WHERE user_id = ?'
+  ).bind(userId).first()
+
+  if (!row) {
+    return c.json({
+      work_style: 'remote',
+      deal_breakers: [],
+      target_industries: [],
+      experience_level: 'mid',
+      languages: ['English'],
+    })
+  }
+
+  return c.json({
+    work_style: row.work_style,
+    deal_breakers: JSON.parse(row.deal_breakers || '[]'),
+    target_industries: JSON.parse(row.target_industries || '[]'),
+    experience_level: row.experience_level,
+    languages: JSON.parse(row.languages || '["English"]'),
+  })
+})
+
+// PUT /profile/preferences — save job search preferences
+profileRoutes.put('/preferences', async (c) => {
+  const userId = c.get('userId')
+  const { work_style, deal_breakers, target_industries, experience_level, languages } = await c.req.json()
+
+  // Ensure table exists
+  await c.env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      work_style TEXT DEFAULT 'remote',
+      deal_breakers TEXT DEFAULT '[]',
+      target_industries TEXT DEFAULT '[]',
+      experience_level TEXT DEFAULT 'mid',
+      languages TEXT DEFAULT '["English"]',
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `).run()
+
+  await c.env.DB.prepare(
+    `INSERT INTO user_preferences (user_id, work_style, deal_breakers, target_industries, experience_level, languages, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(user_id) DO UPDATE SET
+       work_style = COALESCE(?, work_style),
+       deal_breakers = COALESCE(?, deal_breakers),
+       target_industries = COALESCE(?, target_industries),
+       experience_level = COALESCE(?, experience_level),
+       languages = COALESCE(?, languages),
+       updated_at = datetime('now')`
+  ).bind(
+    userId,
+    work_style || 'remote',
+    JSON.stringify(deal_breakers || []),
+    JSON.stringify(target_industries || []),
+    experience_level || 'mid',
+    JSON.stringify(languages || ['English']),
+    work_style || null,
+    deal_breakers ? JSON.stringify(deal_breakers) : null,
+    target_industries ? JSON.stringify(target_industries) : null,
+    experience_level || null,
+    languages ? JSON.stringify(languages) : null,
+  ).run()
+
+  return c.json({ success: true })
+})
+
 // PUT /profile/roles — replace target roles
 profileRoutes.put('/roles', async (c) => {
   const userId = c.get('userId')

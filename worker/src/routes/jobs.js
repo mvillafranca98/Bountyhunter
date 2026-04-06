@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { requireAuth } from '../middleware/auth.js'
 import { generateId } from '../lib/crypto.js'
 import { scoreJobFit, tailorResume, generateCoverLetter, generateSampleJobs } from '../lib/claude.js'
+import { fetchUserPreferences } from '../lib/preferences.js'
 
 export const jobRoutes = new Hono()
 jobRoutes.use('*', requireAuth)
@@ -268,14 +269,21 @@ jobRoutes.post('/real-search', async (c) => {
       'SELECT * FROM salary_preferences WHERE user_id = ? LIMIT 1'
     ).bind(userId).first()
     const user = await c.env.DB.prepare(
-      'SELECT location, employment_type FROM users WHERE id = ?'
+      'SELECT location, employment_type, work_authorization FROM users WHERE id = ?'
     ).bind(userId).first()
 
     userPrefs = {
       salary: salary ? `$${salary.min_yearly}–$${salary.max_yearly}/yr` : null,
       location: user?.location || null,
       employment_type: user?.employment_type || 'full-time',
+      work_authorization: user?.work_authorization || null,
     }
+  }
+
+  // Fetch job search preferences for enhanced scoring
+  let jobSearchPrefs = null
+  if (hasAI) {
+    jobSearchPrefs = await fetchUserPreferences(c.env.DB, userId)
   }
 
   // Insert into D1 and optionally score top 5
@@ -293,7 +301,7 @@ jobRoutes.post('/real-search', async (c) => {
     // Score only top 5 with Claude to save API calls
     if (hasAI && i < 5) {
       try {
-        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs)
+        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
         fitScore = result.score
         fitReasoning = JSON.stringify(result)
         status = result.score >= 75 ? 'scored' : 'low_fit'
@@ -459,6 +467,167 @@ jobRoutes.post('/:id/prepare', async (c) => {
   ).bind(jobId).run()
 
   return c.json({ resume_version_id: versionId, tailored_resume: tailoredResume, cover_letter: coverLetter })
+})
+
+// POST /jobs/import-url — import a job from any URL
+jobRoutes.post('/import-url', async (c) => {
+  const userId = c.get('userId')
+  const { url } = await c.req.json()
+
+  if (!url) return c.json({ error: 'URL is required' }, 400)
+
+  // 1. Fetch the page HTML
+  let html
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; BountyHunter/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    html = await res.text()
+  } catch (e) {
+    return c.json({ error: `Could not fetch URL: ${e.message}` }, 400)
+  }
+
+  // 2. Extract text content from HTML (strip tags, scripts, styles)
+  const textContent = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 8000) // Limit to 8k chars for Claude
+
+  if (textContent.length < 50) {
+    return c.json({ error: 'Could not extract job content from this URL. The page may require JavaScript or login.' }, 400)
+  }
+
+  // 3. Use Claude to extract structured job data from the raw text
+  const anthropicKey = c.env.ANTHROPIC_API_KEY
+  if (!anthropicKey) {
+    return c.json({ error: 'AI service not configured. Please set ANTHROPIC_API_KEY.' }, 500)
+  }
+
+  const extractionPrompt = `Extract the job posting information from this web page text. Return ONLY valid JSON with these fields:
+{
+  "title": "job title",
+  "company": "company name",
+  "location": "job location (city, state, country) or 'Remote'",
+  "description": "full job description (responsibilities, requirements, etc.) - max 3000 chars",
+  "salary": "salary range if mentioned, or null",
+  "employment_type": "full-time, part-time, contract, or freelance",
+  "remote": true/false,
+  "requirements": "key requirements listed as a short summary"
+}
+
+If you cannot find job posting content, return: {"error": "No job posting found on this page"}
+
+Web page text:
+${textContent}`
+
+  let jobData
+  try {
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: extractionPrompt }],
+      }),
+    })
+    const aiJson = await aiRes.json()
+    const text = aiJson.content?.[0]?.text || ''
+    // Parse JSON from response (handle markdown code blocks)
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON in response')
+    jobData = JSON.parse(jsonMatch[0])
+    if (jobData.error) {
+      return c.json({ error: jobData.error }, 400)
+    }
+  } catch (e) {
+    return c.json({ error: `Failed to parse job posting: ${e.message}` }, 500)
+  }
+
+  // 4. Score fit against user's resume
+  let fitScore = null
+  let fitReasoning = null
+  let status = 'new'
+
+  try {
+    const resume = await c.env.DB.prepare(
+      'SELECT parsed_data FROM resumes WHERE user_id = ? AND is_active = 1 LIMIT 1'
+    ).bind(userId).first()
+    const parsedResume = resume?.parsed_data ? JSON.parse(resume.parsed_data) : {}
+
+    const salary = await c.env.DB.prepare(
+      'SELECT * FROM salary_preferences WHERE user_id = ? LIMIT 1'
+    ).bind(userId).first()
+    const user = await c.env.DB.prepare(
+      'SELECT location, employment_type, work_authorization FROM users WHERE id = ?'
+    ).bind(userId).first()
+
+    const userPrefs = {
+      salary: salary ? `$${salary.min_yearly}–$${salary.max_yearly}/yr` : null,
+      location: user?.location || null,
+      employment_type: user?.employment_type || 'full-time',
+      work_authorization: user?.work_authorization || null,
+    }
+
+    const jobSearchPrefs = await fetchUserPreferences(c.env.DB, userId)
+
+    const result = await scoreJobFit(anthropicKey, jobData.description || textContent.slice(0, 4000), parsedResume, userPrefs, jobSearchPrefs)
+    fitScore = result.score
+    fitReasoning = JSON.stringify(result)
+    status = result.score >= 75 ? 'scored' : 'low_fit'
+  } catch (e) {
+    console.error('Scoring failed:', e.message)
+    // Continue without scoring
+  }
+
+  // 5. Insert into database
+  const id = generateId()
+  const externalId = 'url_' + url.replace(/[^a-zA-Z0-9]/g, '').slice(0, 100)
+
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO jobs
+     (id, user_id, source, external_id, title, company, location, url, description, fit_score, fit_reasoning, status)
+     VALUES (?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    id, userId, externalId,
+    jobData.title || 'Untitled Position',
+    jobData.company || 'Unknown Company',
+    jobData.location || '',
+    url,
+    (jobData.description || '').slice(0, 4000),
+    fitScore, fitReasoning, status
+  ).run()
+
+  return c.json({
+    success: true,
+    job: {
+      id,
+      title: jobData.title,
+      company: jobData.company,
+      location: jobData.location,
+      url,
+      salary: jobData.salary,
+      employment_type: jobData.employment_type,
+      remote: jobData.remote,
+      fit_score: fitScore,
+      fit_reasoning: fitReasoning ? JSON.parse(fitReasoning) : null,
+      status,
+    },
+    message: `Imported "${jobData.title}" at ${jobData.company}${fitScore ? ` — ${fitScore}% fit` : ''}`
+  })
 })
 
 // PUT /jobs/:id/status

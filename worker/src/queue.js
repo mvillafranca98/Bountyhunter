@@ -1,6 +1,7 @@
 // Cloudflare Queue consumer — processes async job pipeline tasks
 import { scoreJobFit } from './lib/claude.js'
 import { generateId } from './lib/crypto.js'
+import { fetchUserPreferences } from './lib/preferences.js'
 
 export async function handleQueue(batch, env) {
   for (const msg of batch.messages) {
@@ -93,7 +94,7 @@ async function handleScoreJob({ userId, jobId }, env) {
   ).bind(userId).first()
 
   const user = await env.DB.prepare(
-    'SELECT location, employment_type FROM users WHERE id = ?'
+    'SELECT location, employment_type, work_authorization FROM users WHERE id = ?'
   ).bind(userId).first()
 
   const parsedResume = resume?.parsed_data ? JSON.parse(resume.parsed_data) : {}
@@ -101,9 +102,12 @@ async function handleScoreJob({ userId, jobId }, env) {
     salary: salary ? `$${salary.min_yearly}–$${salary.max_yearly}/yr` : null,
     location: user?.location,
     employment_type: user?.employment_type,
+    work_authorization: user?.work_authorization,
   }
 
-  const result = await scoreJobFit(env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs)
+  const jobSearchPrefs = await fetchUserPreferences(env.DB, userId)
+
+  const result = await scoreJobFit(env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
 
   const status = result.score >= 75 ? 'scored' : 'low_fit'
 

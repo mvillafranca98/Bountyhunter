@@ -145,17 +145,59 @@ Experience bullets should be achievement-focused (not just responsibilities).`
 }
 
 // ─── Job Fit Scoring ───────────────────────────────────────────────────────────
-export async function scoreJobFit(apiKey, jobDescription, parsedResume, userPrefs) {
-  const system = `You are a senior technical recruiter scoring candidate-job fit.
+export async function scoreJobFit(apiKey, jobDescription, parsedResume, userPrefs, jobSearchPrefs) {
+  // jobSearchPrefs is optional — backwards compatible if not passed
+  const prefs = jobSearchPrefs || {}
+
+  const system = `You are an expert job-fit analyst. Score how well this candidate matches the job posting.
 Return ONLY valid JSON:
 {
   "score": number (0-100),
   "verdict": "strong_fit | good_fit | possible_fit | weak_fit",
-  "highlights": ["string — why this is a good match"],
-  "gaps": ["string — skills/experience missing"],
+  "highlights": ["string — specific skills/experiences that match"],
+  "gaps": ["string — specific requirements the candidate doesn't meet"],
+  "deal_breakers": ["string — any hard deal-breakers found (empty array if none)"],
   "salary_match": true | false | null,
-  "reasoning": "string (2-3 sentences)"
-}`
+  "reasoning": "string (2-3 sentences explaining the score)"
+}
+
+SCORING RULES:
+- 90-100: Near-perfect match — skills, experience level, and preferences all align
+- 75-89: Strong match — most requirements met, minor gaps that won't disqualify
+- 50-74: Partial match — has relevant skills but significant gaps (seniority, stack, location)
+- 25-49: Weak match — some transferable skills but major misalignments
+- 0-24: Poor match — fundamental mismatches (wrong field, hard deal-breakers)
+
+DEAL-BREAKER RULES (cap score at 30 max if any apply):
+- Job requires on-site and candidate is remote-only AND in a different city/country than the job
+- Job says a specific degree is "required" (not "preferred") and candidate lacks it
+- Job requires 5+ more years of experience than candidate has
+- Job requires specific visa/work authorization candidate doesn't have
+
+EXPERIENCE LEVEL MATCHING:
+- Compare the seniority implied by the job (entry, mid, senior, staff, lead, principal) with the candidate's experience
+- A mid-level candidate applying to a senior role = partial gap (reduce score by 10-20)
+- A senior candidate applying to an entry role = overqualified (reduce score by 10-15)
+- Match years of experience to the level: entry (0-2yr), mid (2-5yr), senior (5-10yr), lead/staff (8+yr)
+
+STACK ALIGNMENT:
+- Exact stack matches (e.g., job wants React + Node.js, candidate knows React + Node.js) = full credit
+- Adjacent/transferable skills (e.g., job wants Vue.js, candidate knows React) = partial credit (70-80%)
+- Completely different stack (e.g., job wants Java Spring, candidate only knows Python Flask) = significant gap
+
+SALARY ALIGNMENT:
+- If both job salary and candidate salary expectations are known, check overlap
+- salary_match = true if ranges overlap, false if no overlap, null if data missing on either side
+
+PREFERENCE ALIGNMENT:
+- Consider candidate's preferred work style (remote/hybrid/onsite) vs what the job offers
+- Consider candidate's preferred employment type vs what the job offers
+- If candidate has specific deal-breakers set, respect them
+
+In "highlights", list 2-4 specific skills/experiences that match.
+In "gaps", list specific requirements the candidate doesn't meet.
+In "deal_breakers", list any hard deal-breakers found (empty array if none).
+In "reasoning", explain the score in 2-3 sentences.`
 
   const prompt = `Score this candidate's fit for the job.
 
@@ -167,10 +209,19 @@ ${JSON.stringify(parsedResume, null, 2)}
 
 Candidate Preferences:
 - Salary range: ${userPrefs.salary || 'not specified'}
-- Location preference: ${userPrefs.location || 'flexible'}
+- Location: ${userPrefs.location || 'flexible'}
 - Employment type: ${userPrefs.employment_type || 'full-time'}
+- Work authorization: ${userPrefs.work_authorization || 'not specified'}
 
-Be honest. A 90+ score means the candidate is nearly perfect for this role.`
+Job Search Preferences:
+- Preferred work style: ${prefs.work_style || 'any'}
+- Experience level: ${prefs.experience_level || 'not specified'}
+- Deal-breakers to enforce: ${prefs.deal_breakers?.length ? prefs.deal_breakers.join(', ') : 'none specified'}
+- Target industries: ${prefs.target_industries?.length ? prefs.target_industries.join(', ') : 'any'}
+- Languages spoken: ${prefs.languages?.length ? prefs.languages.join(', ') : 'not specified'}
+
+Be honest and nuanced. A 90+ score means the candidate is nearly perfect for this role.
+If deal-breakers are triggered, explain which ones in the deal_breakers array and cap the score at 30.`
 
   const result = await callClaude(apiKey, system, prompt)
   return parseJSON(result)

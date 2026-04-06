@@ -38,6 +38,8 @@ export const profileApi = {
   update: (data) => api.put('/profile', data),
   updateSalary: (data) => api.put('/profile/salary', data),
   updateRoles: (roles) => api.put('/profile/roles', { roles }),
+  getPreferences: () => api.get('/profile/preferences'),
+  updatePreferences: (data) => api.put('/profile/preferences', data),
 }
 
 // ─── Resume ────────────────────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ export const jobsApi = {
   prepare: (id) => api.post(`/jobs/${id}/prepare`, {}, { timeout: 90000 }),
   updateStatus: (id, status) => api.put(`/jobs/${id}/status`, { status }),
   flag: (id) => api.put(`/jobs/${id}/flag`),
+  importUrl: (data) => api.post('/jobs/import-url', data, { timeout: 60000 }),
 }
 
 // ─── Applications ──────────────────────────────────────────────────────────────

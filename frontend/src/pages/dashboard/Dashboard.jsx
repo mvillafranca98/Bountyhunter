@@ -26,6 +26,8 @@ export default function Dashboard() {
   const [seeding, setSeeding] = useState(false)
   const [findingReal, setFindingReal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [importUrl, setImportUrl] = useState('')
+  const [importingUrl, setImportingUrl] = useState(false)
 
   useEffect(() => {
     dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
@@ -76,6 +78,22 @@ export default function Dashboard() {
       toast.error(err.response?.data?.error || 'Failed to find real jobs')
     } finally {
       setFindingReal(false)
+    }
+  }
+
+  const importJobUrl = async () => {
+    if (!importUrl.trim()) return
+    setImportingUrl(true)
+    try {
+      const { data } = await jobsApi.importUrl({ url: importUrl.trim() })
+      toast.success(data.message || 'Job imported!')
+      setImportUrl('')
+      // Refresh dashboard
+      dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to import job from URL')
+    } finally {
+      setImportingUrl(false)
     }
   }
 
@@ -154,6 +172,31 @@ export default function Dashboard() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Import job by URL */}
+      <div className="flex gap-3">
+        <input
+          type="url"
+          className="input flex-1"
+          placeholder="Paste a job URL from any site (LinkedIn, Indeed, Wellfound…)"
+          value={importUrl}
+          onChange={e => setImportUrl(e.target.value)}
+        />
+        <button
+          onClick={importJobUrl}
+          disabled={importingUrl || !importUrl.trim()}
+          className="btn-primary px-6 whitespace-nowrap"
+        >
+          {importingUrl ? (
+            <>
+              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
+              Importing… (~15s)
+            </>
+          ) : (
+            'Import job'
+          )}
+        </button>
       </div>
 
       {/* Stats grid */}
