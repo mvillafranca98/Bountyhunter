@@ -53,7 +53,6 @@
     @apply inline-flex items-center justify-center gap-2
            bg-gradient-cta text-white font-semibold font-display
            px-5 py-2.5 rounded-lg text-sm
-           shadow-glow-signal/50
            transition-all duration-base
            hover:brightness-110 hover:-translate-y-px hover:shadow-glow-signal
            active:translate-y-0 active:brightness-100
