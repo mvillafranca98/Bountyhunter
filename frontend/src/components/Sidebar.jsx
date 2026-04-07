@@ -2,13 +2,13 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
-  { to: '/',            label: 'Dashboard',    icon: GridIcon },
-  { to: '/jobs',        label: 'Job Queue',    icon: BriefcaseIcon },
-  { to: '/applications',label: 'Applications', icon: CheckIcon },
-  { to: '/resume',      label: 'Resume',       icon: DocumentIcon },
-  { to: '/questions',   label: 'Question Bank',icon: ChatIcon },
-  { to: '/analytics',   label: 'Analytics',    icon: ChartIcon },
-  { to: '/profile',     label: 'Profile',      icon: UserIcon },
+  { to: '/dashboard',              label: 'Dashboard',    icon: GridIcon },
+  { to: '/dashboard/jobs',         label: 'Job Queue',    icon: BriefcaseIcon },
+  { to: '/dashboard/applications', label: 'Applications', icon: CheckIcon },
+  { to: '/dashboard/resume',       label: 'Resume',       icon: DocumentIcon },
+  { to: '/dashboard/questions',    label: 'Question Bank',icon: ChatIcon },
+  { to: '/dashboard/analytics',    label: 'Analytics',    icon: ChartIcon },
+  { to: '/dashboard/profile',      label: 'Profile',      icon: UserIcon },
 ]
 
 export default function Sidebar() {
@@ -16,28 +16,27 @@ export default function Sidebar() {
   const navigate = useNavigate()
 
   return (
-    <aside className="w-60 flex flex-col bg-surface-900 border-r border-surface-600 shrink-0">
+    <aside className="w-56 flex flex-col bg-surface-950 border-r border-surface-600 shrink-0">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-surface-600">
+      <div className="px-4 py-5 border-b border-surface-600">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center text-white font-bold text-sm">B</div>
-          <span className="font-semibold text-white tracking-tight">BountyHunter</span>
+          <div className="w-7 h-7 bg-gradient-cobalt rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0">B</div>
+          <span className="font-display font-semibold text-ink-primary tracking-tight">BountyHunter</span>
         </div>
-        <p className="text-xs text-gray-500 mt-1 ml-9.5">AI Job Copilot</p>
+        <p className="text-xs text-ink-muted mt-1 ml-9">AI Job Copilot</p>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-100 ${
+              `flex items-center gap-3 px-3 py-2 text-sm transition-colors duration-100 rounded-r-lg ${
                 isActive
-                  ? 'bg-brand/15 text-white font-medium'
-                  : 'text-gray-400 hover:text-white hover:bg-surface-700'
+                  ? 'bg-cobalt/10 text-white font-medium border-l-2 border-cobalt'
+                  : 'text-ink-muted hover:text-ink-primary hover:bg-surface-800 border-l-2 border-transparent'
               }`
             }
           >
@@ -48,19 +47,19 @@ export default function Sidebar() {
       </nav>
 
       {/* User + logout */}
-      <div className="px-3 py-4 border-t border-surface-600">
+      <div className="border-t border-surface-600 px-3 py-4">
         <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-7 h-7 rounded-full bg-brand/20 text-brand-light flex items-center justify-center text-xs font-bold uppercase shrink-0">
+          <div className="w-7 h-7 rounded-full bg-gradient-cobalt text-white flex items-center justify-center text-xs font-bold uppercase shrink-0">
             {user?.first_name?.[0]}{user?.last_name?.[0]}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.first_name} {user?.last_name}</p>
-            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+            <p className="text-sm font-medium text-ink-primary truncate">{user?.first_name} {user?.last_name}</p>
+            <p className="text-xs text-ink-muted truncate">{user?.email}</p>
           </div>
         </div>
         <button
           onClick={() => { logout(); navigate('/login') }}
-          className="w-full mt-1 text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-surface-700 transition-colors"
+          className="w-full mt-1 text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-ink-muted hover:text-danger transition-colors"
         >
           <LogoutIcon className="w-4 h-4" />
           Sign out
