@@ -35,22 +35,22 @@ export default function Applications() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Applications</h1>
+      <h1 className="font-display text-3xl font-bold text-ink-primary">Applications</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-surface-600">
+      <div className="flex gap-0 border-b border-surface-600">
         {[
-          { key: 'applied',  label: `Applied (${applications.length})` },
-          { key: 'blockers', label: `Needs You (${blockers.length})` },
-          { key: 'expired',  label: `Expired (${expired.length})` },
+          { key: 'applied',   label: `Applied (${applications.length})` },
+          { key: 'blockers',  label: `Needs You (${blockers.length})` },
+          { key: 'expired',   label: `Expired (${expired.length})` },
         ].map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`px-5 py-3 text-sm transition-colors border-b-2 -mb-px ${
               tab === t.key
-                ? 'border-brand text-white'
-                : 'border-transparent text-gray-400 hover:text-white'
+                ? 'border-cobalt text-ink-primary font-semibold font-display'
+                : 'border-transparent text-ink-muted hover:text-ink-primary'
             }`}
           >
             {t.label}
@@ -58,24 +58,26 @@ export default function Applications() {
         ))}
       </div>
 
-      {loading && <div className="text-gray-500 text-sm text-center py-8">Loading…</div>}
+      {loading && (
+        <div className="text-ink-muted text-sm text-center py-8">Loading…</div>
+      )}
 
       {/* Applied */}
       {!loading && tab === 'applied' && (
         <div className="space-y-2">
           {applications.length === 0 && (
-            <div className="card text-center py-12 text-gray-600">No applications yet</div>
+            <div className="card text-center py-14 text-ink-muted text-sm">No applications yet</div>
           )}
           {applications.map(app => (
-            <div key={app.id} className="card flex items-center gap-4">
+            <div key={app.id} className="card flex items-center gap-4 transition-all hover:border-surface-500">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-white">{app.title}</p>
-                <p className="text-sm text-gray-400">{app.company} · <span className="capitalize">{app.source}</span></p>
+                <p className="font-semibold text-ink-primary">{app.title}</p>
+                <p className="text-sm text-ink-muted">{app.company} · <span className="capitalize">{app.source}</span></p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <span className={`badge ${app.method === 'auto' ? 'badge-green' : 'badge-blue'} capitalize`}>{app.method}</span>
-                <span className="text-xs text-gray-500">{new Date(app.applied_at).toLocaleDateString()}</span>
-                <a href={app.url} target="_blank" rel="noreferrer" className="text-xs text-brand-light hover:underline">View ↗</a>
+                <span className={`badge ${app.method === 'auto' ? 'badge-green' : 'badge-cobalt'} capitalize`}>{app.method}</span>
+                <span className="text-xs text-ink-muted">{new Date(app.applied_at).toLocaleDateString()}</span>
+                <a href={app.url} target="_blank" rel="noreferrer" className="text-xs text-cobalt-light hover:underline">View ↗</a>
               </div>
             </div>
           ))}
@@ -86,19 +88,19 @@ export default function Applications() {
       {!loading && tab === 'blockers' && (
         <div className="space-y-2">
           {blockers.length === 0 && (
-            <div className="card text-center py-12 text-gray-600">No blocked applications</div>
+            <div className="card text-center py-14 text-ink-muted text-sm">No blocked applications</div>
           )}
           {blockers.map(b => (
-            <div key={b.id} className="card">
+            <div key={b.id} className="card transition-all hover:border-surface-500">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white">{b.title}</p>
-                  <p className="text-sm text-gray-400">{b.company}</p>
-                  {b.reason_detail && <p className="text-xs text-gray-500 mt-1">{b.reason_detail}</p>}
+                  <p className="font-semibold text-ink-primary">{b.title}</p>
+                  <p className="text-sm text-ink-muted">{b.company}</p>
+                  {b.reason_detail && <p className="text-xs text-ink-muted mt-1">{b.reason_detail}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
                   <BlockerReasonBadge reason={b.reason} />
-                  <a href={b.url} target="_blank" rel="noreferrer" className="text-xs text-brand-light hover:underline">Apply manually ↗</a>
+                  <a href={b.url} target="_blank" rel="noreferrer" className="text-xs text-cobalt-light hover:underline">Apply manually ↗</a>
                 </div>
               </div>
             </div>
@@ -110,13 +112,13 @@ export default function Applications() {
       {!loading && tab === 'expired' && (
         <div className="space-y-2">
           {expired.length === 0 && (
-            <div className="card text-center py-12 text-gray-600">No expired jobs</div>
+            <div className="card text-center py-14 text-ink-muted text-sm">No expired jobs</div>
           )}
           {expired.map(app => (
-            <div key={app.id} className="card flex items-center gap-4 opacity-60">
+            <div key={app.id} className="card flex items-center gap-4 opacity-50">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-white">{app.title}</p>
-                <p className="text-sm text-gray-400">{app.company}</p>
+                <p className="font-medium text-ink-primary">{app.title}</p>
+                <p className="text-sm text-ink-muted">{app.company}</p>
               </div>
               <span className="badge badge-gray">Expired</span>
             </div>

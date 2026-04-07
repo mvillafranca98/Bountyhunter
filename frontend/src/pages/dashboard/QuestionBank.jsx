@@ -105,10 +105,11 @@ export default function QuestionBank() {
 
   return (
     <div className="space-y-6">
+      {/* Page header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Question Bank</h1>
-          <p className="text-gray-400 text-sm mt-1">Pre-generated answers for screening questions</p>
+          <h1 className="font-display text-3xl font-bold text-ink-primary">Question Bank</h1>
+          <p className="text-ink-muted text-sm mt-1">Pre-generated answers for screening questions</p>
         </div>
         <div className="flex gap-2">
           {questions.length === 0 && (
@@ -116,14 +117,14 @@ export default function QuestionBank() {
               {seeding ? 'Generating…' : 'Seed with AI answers'}
             </button>
           )}
-          <button onClick={() => setShowAdd(s => !s)} className="btn-ghost text-sm">+ Add</button>
+          <button onClick={() => setShowAdd(s => !s)} className="btn-secondary text-sm">+ Add</button>
         </div>
       </div>
 
-      {/* Add form */}
+      {/* Add question form */}
       {showAdd && (
-        <form onSubmit={addQuestion} className="card space-y-3">
-          <p className="font-medium text-white">New question</p>
+        <form onSubmit={addQuestion} className="card space-y-4 border-cobalt/30">
+          <p className="font-display font-semibold text-ink-primary">New question</p>
           <div>
             <label className="label">Question</label>
             <div className="flex gap-2">
@@ -162,31 +163,33 @@ export default function QuestionBank() {
         </form>
       )}
 
-      {loading && <div className="text-gray-500 text-sm text-center py-8">Loading…</div>}
+      {/* Loading state */}
+      {loading && <div className="text-ink-muted text-sm text-center py-8">Loading…</div>}
 
+      {/* Empty state */}
       {!loading && questions.length === 0 && !showAdd && (
-        <div className="card text-center py-16 space-y-3">
-          <p className="text-gray-500">No questions yet</p>
-          <p className="text-sm text-gray-600">Click "Seed with AI answers" to auto-generate responses based on your profile.</p>
+        <div className="card text-center py-20 space-y-3">
+          <p className="text-ink-muted">No questions yet</p>
+          <p className="text-sm text-ink-muted/60">Click "Seed with AI answers" to auto-generate responses based on your profile.</p>
         </div>
       )}
 
       {/* Questions by category */}
       {Object.entries(grouped).map(([cat, qs]) => (
         <div key={cat}>
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          <h2 className="section-label mb-3 mt-6 first:mt-0">
             {CATEGORY_LABELS[cat] || cat}
           </h2>
           <div className="space-y-2">
             {qs.map(q => (
-              <div key={q.id} className="card">
+              <div key={q.id} className="card transition-all hover:border-surface-500">
                 <div className="flex items-start justify-between gap-4">
-                  <p className="text-sm font-medium text-white flex-1">{q.question_template}</p>
+                  <p className="text-sm font-semibold text-ink-primary flex-1">{q.question_template}</p>
                   <div className="flex gap-2 shrink-0">
                     {editingId !== q.id && (
                       <>
-                        <button onClick={() => startEdit(q)} className="text-xs text-gray-500 hover:text-brand-light">Edit</button>
-                        <button onClick={() => deleteQ(q.id)} className="text-xs text-gray-500 hover:text-danger">Delete</button>
+                        <button onClick={() => startEdit(q)} className="text-xs text-ink-muted hover:text-cobalt-light transition-colors">Edit</button>
+                        <button onClick={() => deleteQ(q.id)} className="text-xs text-ink-muted hover:text-signal transition-colors">Delete</button>
                       </>
                     )}
                   </div>
@@ -205,7 +208,7 @@ export default function QuestionBank() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400 mt-2 leading-relaxed">{q.answer}</p>
+                  <p className="text-sm text-ink-secondary mt-2 leading-relaxed">{q.answer}</p>
                 )}
               </div>
             ))}

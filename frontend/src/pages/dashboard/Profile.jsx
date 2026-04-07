@@ -120,17 +120,18 @@ export default function Profile() {
     setPrefs(p => ({ ...p, languages: p.languages.filter(l => l !== lang) }))
   }
 
-  if (loading) return <div className="text-gray-500 text-sm text-center py-16">Loading...</div>
+  if (loading) return <div className="text-ink-muted text-sm text-center py-16">Loading...</div>
 
   const u = profile?.user || {}
 
   return (
     <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-bold text-white">Profile</h1>
+      <h1 className="font-display text-3xl font-bold text-ink-primary">Profile</h1>
 
       <form onSubmit={save} className="space-y-5">
+        {/* Personal Info */}
         <div className="card space-y-4">
-          <p className="font-medium text-white">Personal info</p>
+          <p className="font-display font-semibold text-ink-primary">Personal info</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">First name</label>
@@ -155,8 +156,9 @@ export default function Profile() {
           </div>
         </div>
 
+        {/* Job Preferences */}
         <div className="card space-y-4">
-          <p className="font-medium text-white">Job preferences</p>
+          <p className="font-display font-semibold text-ink-primary">Job preferences</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Work authorization</label>
@@ -182,42 +184,43 @@ export default function Profile() {
           </div>
         </div>
 
+        {/* Auto-apply Settings */}
         <div className="card space-y-4">
-          <p className="font-medium text-white">Auto-apply settings</p>
+          <p className="font-display font-semibold text-ink-primary">Auto-apply settings</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-white">Auto-apply mode</p>
-              <p className="text-xs text-gray-500">Automatically submit applications above threshold</p>
+              <p className="text-sm text-ink-primary">Auto-apply mode</p>
+              <p className="text-xs text-ink-muted">Automatically submit applications above threshold</p>
             </div>
             <button
               type="button"
               onClick={() => setAutoApply(v => !v)}
-              className={`relative w-10 h-5 rounded-full transition-colors ${autoApply ? 'bg-brand' : 'bg-surface-600'}`}
+              className={`relative w-10 h-5 rounded-full transition-colors ${autoApply ? 'bg-cobalt' : 'bg-surface-600'}`}
             >
               <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoApply ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
             </button>
           </div>
           <div>
-            <label className="label">Fit threshold: <span className="text-brand-light">{fitThreshold}%</span></label>
+            <label className="label">Fit threshold: <span className="text-cobalt-light">{fitThreshold}%</span></label>
             <input
               type="range" min={50} max={95} step={5}
-              className="w-full accent-brand"
+              className="w-full accent-cobalt"
               value={fitThreshold}
               onChange={e => setFitThreshold(Number(e.target.value))}
             />
           </div>
         </div>
 
-        <button type="submit" disabled={saving} className="btn-primary w-full justify-center">
+        <button type="submit" disabled={saving} className="btn-primary w-full">
           {saving ? 'Saving...' : 'Save changes'}
         </button>
       </form>
 
-      {/* ── Job Search Preferences (separate save) ── */}
+      {/* Job Search Preferences (separate save) */}
       <div className="card space-y-5">
         <div>
-          <p className="font-medium text-white">Job search preferences</p>
-          <p className="text-xs text-gray-500 mt-0.5">These preferences improve AI fit scoring accuracy</p>
+          <p className="font-display font-semibold text-ink-primary">Job search preferences</p>
+          <p className="text-xs text-ink-muted mt-0.5">These preferences improve AI fit scoring accuracy</p>
         </div>
 
         {/* Work Style */}
@@ -229,10 +232,10 @@ export default function Profile() {
                 key={ws.value}
                 type="button"
                 onClick={() => setPrefs(p => ({ ...p, work_style: ws.value }))}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-sm font-display transition-colors ${
                   prefs.work_style === ws.value
-                    ? 'bg-brand text-white'
-                    : 'bg-surface-700 text-gray-400 hover:bg-surface-600'
+                    ? 'bg-cobalt text-white font-medium'
+                    : 'bg-surface-700 text-ink-muted hover:bg-surface-600 hover:text-ink-secondary'
                 }`}
               >
                 {ws.label}
@@ -250,10 +253,10 @@ export default function Profile() {
                 key={lvl.value}
                 type="button"
                 onClick={() => setPrefs(p => ({ ...p, experience_level: lvl.value }))}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-sm font-display transition-colors ${
                   prefs.experience_level === lvl.value
-                    ? 'bg-brand text-white'
-                    : 'bg-surface-700 text-gray-400 hover:bg-surface-600'
+                    ? 'bg-cobalt text-white font-medium'
+                    : 'bg-surface-700 text-ink-muted hover:bg-surface-600 hover:text-ink-secondary'
                 }`}
               >
                 {lvl.label}
@@ -265,7 +268,7 @@ export default function Profile() {
         {/* Deal Breakers */}
         <div>
           <label className="label mb-2">Deal breakers</label>
-          <p className="text-xs text-gray-500 mb-2">Jobs matching these criteria will be scored lower</p>
+          <p className="text-xs text-ink-muted mb-2">Jobs matching these criteria will be scored lower</p>
           <div className="space-y-2">
             {DEAL_BREAKER_OPTIONS.map(db => (
               <label key={db.value} className="flex items-center gap-2 cursor-pointer">
@@ -273,9 +276,9 @@ export default function Profile() {
                   type="checkbox"
                   checked={prefs.deal_breakers.includes(db.value)}
                   onChange={() => toggleDealBreaker(db.value)}
-                  className="w-4 h-4 rounded border-surface-600 bg-surface-700 text-brand accent-brand"
+                  className="w-4 h-4 rounded border-surface-600 bg-surface-700 accent-cobalt"
                 />
-                <span className="text-sm text-gray-300">{db.label}</span>
+                <span className="text-sm text-ink-secondary">{db.label}</span>
               </label>
             ))}
           </div>
@@ -290,10 +293,10 @@ export default function Profile() {
                 key={ind}
                 type="button"
                 onClick={() => toggleIndustry(ind)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-sm font-display transition-colors ${
                   prefs.target_industries.includes(ind)
-                    ? 'bg-brand text-white'
-                    : 'bg-surface-700 text-gray-400 hover:bg-surface-600'
+                    ? 'bg-cobalt text-white font-medium'
+                    : 'bg-surface-700 text-ink-muted hover:bg-surface-600 hover:text-ink-secondary'
                 }`}
               >
                 {ind}
@@ -307,12 +310,12 @@ export default function Profile() {
           <label className="label mb-2">Languages spoken</label>
           <div className="flex flex-wrap gap-2 mb-2">
             {prefs.languages.map(lang => (
-              <span key={lang} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-surface-700 text-gray-300">
+              <span key={lang} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm bg-surface-700 text-ink-secondary">
                 {lang}
                 <button
                   type="button"
                   onClick={() => removeLanguage(lang)}
-                  className="text-gray-500 hover:text-danger ml-0.5"
+                  className="text-ink-muted hover:text-signal ml-0.5"
                 >
                   x
                 </button>
@@ -331,7 +334,7 @@ export default function Profile() {
             <button
               type="button"
               onClick={addLanguage}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-surface-700 text-gray-400 hover:bg-surface-600"
+              className="bg-surface-700 text-ink-muted hover:bg-surface-600 hover:text-ink-secondary px-3 py-1.5 rounded-lg text-sm font-display"
             >
               Add
             </button>
@@ -342,7 +345,7 @@ export default function Profile() {
           type="button"
           onClick={savePrefs}
           disabled={savingPrefs}
-          className="btn-primary w-full justify-center"
+          className="btn-primary w-full"
         >
           {savingPrefs ? 'Saving...' : 'Save search preferences'}
         </button>

@@ -22,7 +22,7 @@ function FitBadge({ score }) {
 
 function StatusBadge({ status }) {
   const map = {
-    new: 'badge-gray', scored: 'badge-blue', ready: 'badge-purple',
+    new: 'badge-gray', scored: 'badge-cobalt', ready: 'badge-violet',
     applied: 'badge-green', needs_manual: 'badge-amber',
     expired: 'badge-gray', low_fit: 'badge-red', flagged: 'badge-red',
   }
@@ -165,14 +165,15 @@ export default function JobQueue() {
 
   return (
     <div className="space-y-6">
+      {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-white">Job Queue</h1>
+        <h1 className="font-display text-3xl font-bold text-ink-primary">Job Queue</h1>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400">Sort by:</span>
+          <span className="text-sm text-ink-muted">Sort by:</span>
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value)}
-            className="input text-sm py-1 px-2 w-auto"
+            className="input text-sm py-1.5 w-auto"
           >
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -182,48 +183,56 @@ export default function JobQueue() {
       </div>
 
       {/* Status tabs */}
-      <div className="flex gap-1 flex-wrap">
+      <div className="flex gap-1 flex-wrap overflow-x-auto pb-1">
         {STATUS_TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveStatus(tab.key)}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
               activeStatus === tab.key
-                ? 'bg-brand text-white font-medium'
-                : 'text-gray-400 hover:text-white hover:bg-surface-700'
+                ? 'bg-cobalt text-white font-medium font-display'
+                : 'text-ink-muted hover:text-ink-primary hover:bg-surface-800'
             }`}
           >
             {tab.label}
             {counts[tab.key] > 0 && (
-              <span className="ml-1.5 text-xs opacity-70">{counts[tab.key]}</span>
+              <span className="text-xs opacity-60 ml-1.5">{counts[tab.key]}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Jobs table */}
+      {/* Jobs list */}
       <div className="space-y-2">
-        {loading && <div className="text-gray-500 text-sm text-center py-8">Loading…</div>}
+        {loading && (
+          <div className="text-ink-muted text-sm text-center py-8">Loading…</div>
+        )}
         {!loading && jobs.length === 0 && (
-          <div className="card text-center py-12 text-gray-600">
-            {activeStatus ? `No jobs with status "${activeStatus}"` : 'Run a search from the Dashboard to populate jobs here'}
+          <div className="card text-center py-16 text-ink-muted">
+            {activeStatus
+              ? `No jobs with status "${activeStatus}"`
+              : 'Run a search from the Dashboard to populate jobs here'}
           </div>
         )}
         {jobs.map(job => (
           <div
             key={job.id}
             onClick={() => setSelected(s => s?.id === job.id ? null : job)}
-            className={`card cursor-pointer transition-all ${selected?.id === job.id ? 'border-brand/60 bg-brand/5' : 'hover:border-surface-500'}`}
+            className={`card cursor-pointer transition-all ${
+              selected?.id === job.id
+                ? 'border-cobalt/60 bg-cobalt/5'
+                : 'hover:border-surface-500'
+            }`}
           >
             <div className="flex items-start gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-white">{job.title}</p>
+                  <p className="font-semibold text-ink-primary">{job.title}</p>
                   <StatusBadge status={job.status} />
                 </div>
-                <p className="text-sm text-gray-400 mt-0.5">{job.company} · {job.location}</p>
+                <p className="text-sm text-ink-secondary mt-0.5">{job.company} · {job.location}</p>
                 {(job.salary_min || job.salary_max) && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-ink-muted mt-1">
                     {job.salary_min && `$${job.salary_min.toLocaleString()}`}
                     {job.salary_min && job.salary_max && ' – '}
                     {job.salary_max && `$${job.salary_max.toLocaleString()}`}
@@ -234,7 +243,7 @@ export default function JobQueue() {
               <div className="flex flex-col items-end gap-2 shrink-0">
                 <FitBadge score={job.fit_score} />
                 {job.posted_at && (
-                  <span className="text-xs text-gray-600">{new Date(job.posted_at).toLocaleDateString()}</span>
+                  <span className="text-xs text-ink-muted">{new Date(job.posted_at).toLocaleDateString()}</span>
                 )}
               </div>
             </div>
@@ -245,12 +254,12 @@ export default function JobQueue() {
                 {/* Fit reasoning */}
                 {job.fit_reasoning && (
                   <div className="bg-surface-900 rounded-lg p-3 space-y-2">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Fit Analysis</p>
-                    <p className="text-sm text-gray-300">{job.fit_reasoning.reasoning}</p>
+                    <p className="section-label">Fit Analysis</p>
+                    <p className="text-sm text-ink-secondary">{job.fit_reasoning.reasoning}</p>
                     {job.fit_reasoning.highlights?.length > 0 && (
                       <div>
                         <p className="text-xs text-success font-medium mb-1">Strengths</p>
-                        <ul className="text-xs text-gray-400 space-y-0.5 list-disc list-inside">
+                        <ul className="text-xs text-ink-muted space-y-0.5 list-disc list-inside">
                           {job.fit_reasoning.highlights.map((h, i) => <li key={i}>{h}</li>)}
                         </ul>
                       </div>
@@ -258,7 +267,7 @@ export default function JobQueue() {
                     {job.fit_reasoning.gaps?.length > 0 && (
                       <div>
                         <p className="text-xs text-warning font-medium mb-1">Gaps</p>
-                        <ul className="text-xs text-gray-400 space-y-0.5 list-disc list-inside">
+                        <ul className="text-xs text-ink-muted space-y-0.5 list-disc list-inside">
                           {job.fit_reasoning.gaps.map((g, i) => <li key={i}>{g}</li>)}
                         </ul>
                       </div>
@@ -271,7 +280,7 @@ export default function JobQueue() {
                   <div className="space-y-3">
                     <div className="bg-surface-900 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Tailored Resume (preview)</p>
+                        <p className="section-label">Tailored Resume (preview)</p>
                         <button
                           onClick={(e) => { e.stopPropagation(); downloadDocx(job.id) }}
                           disabled={downloading}
@@ -280,14 +289,14 @@ export default function JobQueue() {
                           {downloading ? 'Downloading...' : 'Download .docx'}
                         </button>
                       </div>
-                      <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                      <pre className="text-xs text-ink-secondary whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
                         {selected.prepared.tailored_resume?.slice(0, 800)}…
                       </pre>
                     </div>
                     {selected.prepared.cover_letter && (
                       <div className="bg-surface-900 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Cover Letter</p>
-                        <p className="text-xs text-gray-300 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                        <p className="section-label mb-2">Cover Letter</p>
+                        <p className="text-xs text-ink-secondary whitespace-pre-wrap max-h-40 overflow-y-auto">
                           {selected.prepared.cover_letter}
                         </p>
                       </div>
@@ -297,7 +306,7 @@ export default function JobQueue() {
 
                 {/* Notes */}
                 <div className="bg-surface-900 rounded-lg p-3 space-y-3" onClick={e => e.stopPropagation()}>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Notes</p>
+                  <p className="section-label">Notes</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -309,14 +318,14 @@ export default function JobQueue() {
                     />
                     <button onClick={addNote} disabled={!noteText.trim()} className="btn-primary text-xs px-3">Add</button>
                   </div>
-                  {notesLoading && <p className="text-xs text-gray-500">Loading...</p>}
+                  {notesLoading && <p className="text-xs text-ink-muted">Loading...</p>}
                   {notes.length > 0 && (
                     <div className="space-y-1.5 max-h-40 overflow-y-auto">
                       {notes.map(n => (
-                        <div key={n.id} className="flex items-start gap-2 bg-surface-800 rounded px-2.5 py-1.5">
-                          <p className="text-xs text-gray-300 flex-1">{n.content}</p>
-                          <span className="text-xs text-gray-600 shrink-0">{new Date(n.created_at).toLocaleDateString()}</span>
-                          <button onClick={() => deleteNote(n.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0">x</button>
+                        <div key={n.id} className="flex items-start gap-2 bg-surface-800 rounded-lg px-2.5 py-2">
+                          <p className="text-xs text-ink-secondary flex-1">{n.content}</p>
+                          <span className="text-xs text-ink-muted shrink-0">{new Date(n.created_at).toLocaleDateString()}</span>
+                          <button onClick={() => deleteNote(n.id)} className="text-xs text-signal/70 hover:text-signal shrink-0">x</button>
                         </div>
                       ))}
                     </div>
@@ -326,18 +335,18 @@ export default function JobQueue() {
                 {/* Timeline */}
                 {timeline.length > 0 && (
                   <div className="bg-surface-900 rounded-lg p-3 space-y-2" onClick={e => e.stopPropagation()}>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Timeline</p>
+                    <p className="section-label">Timeline</p>
                     <div className="space-y-0 relative pl-4 border-l border-surface-600 max-h-48 overflow-y-auto">
                       {timeline.map((event, i) => (
                         <div key={i} className="relative pb-3 last:pb-0">
                           <div className={`absolute -left-[calc(1rem+4.5px)] top-1 w-2.5 h-2.5 rounded-full ${
-                            event.type === 'created' ? 'bg-gray-400' :
-                            event.type === 'prepared' ? 'bg-purple-400' :
-                            event.type === 'applied' ? 'bg-green-400' :
-                            event.type === 'note' ? 'bg-blue-400' : 'bg-gray-500'
+                            event.type === 'created'  ? 'bg-surface-500' :
+                            event.type === 'prepared' ? 'bg-violet' :
+                            event.type === 'applied'  ? 'bg-success' :
+                            event.type === 'note'     ? 'bg-cobalt' : 'bg-surface-500'
                           }`} />
-                          <p className="text-xs text-gray-300">{event.detail}</p>
-                          <p className="text-xs text-gray-600">{new Date(event.date).toLocaleString()}</p>
+                          <p className="text-xs text-ink-secondary">{event.detail}</p>
+                          <p className="text-xs text-ink-muted">{new Date(event.date).toLocaleString()}</p>
                         </div>
                       ))}
                     </div>
@@ -361,7 +370,7 @@ export default function JobQueue() {
                           {applying ? 'Queuing…' : 'Auto-apply'}
                         </button>
                       )}
-                      <button onClick={() => applyManual(job)} disabled={applying} className="btn-ghost text-xs">
+                      <button onClick={() => applyManual(job)} disabled={applying} className="btn-secondary text-xs">
                         Mark as applied (manual)
                       </button>
                     </>

@@ -13,7 +13,7 @@ function renderInline(str) {
     if (part.startsWith('*') && part.endsWith('*'))
       return <em key={i} className="italic text-gray-200">{part.slice(1, -1)}</em>
     if (part.startsWith('`') && part.endsWith('`'))
-      return <code key={i} className="text-brand-light bg-surface-900 px-1 rounded text-xs font-mono">{part.slice(1, -1)}</code>
+      return <code key={i} className="text-cobalt-light bg-surface-900 px-1 rounded text-xs font-mono">{part.slice(1, -1)}</code>
     return part
   })
 }
@@ -30,7 +30,7 @@ function MarkdownResume({ text }) {
         <ul key={k++} className="list-none space-y-0.5 ml-3 my-1">
           {listItems.splice(0).map((li, i) => (
             <li key={i} className="text-sm text-gray-300 flex gap-2">
-              <span className="text-brand-light shrink-0 mt-0.5">•</span>
+              <span className="text-cobalt-light shrink-0 mt-0.5">•</span>
               <span>{li}</span>
             </li>
           ))}
@@ -52,7 +52,7 @@ function MarkdownResume({ text }) {
     } else if (line.startsWith('## ')) {
       flush()
       elements.push(
-        <h2 key={k++} className="text-sm font-bold text-brand-light uppercase tracking-widest mt-5 mb-1 border-b border-surface-600 pb-1">
+        <h2 key={k++} className="text-sm font-bold text-cobalt-light uppercase tracking-widest mt-5 mb-1 border-b border-surface-600 pb-1">
           {line.slice(3)}
         </h2>
       )
@@ -123,22 +123,22 @@ export default function ResumeStudio() {
 
   useEffect(() => { load() }, [])
 
-  if (loading) return <div className="text-gray-500 text-sm text-center py-16">Loading…</div>
+  if (loading) return <div className="text-ink-muted text-sm text-center py-16">Loading…</div>
 
   if (!resume || showReupload) {
     return (
       <div className="max-w-xl space-y-6">
-        <h1 className="text-2xl font-bold text-white">Resume Studio</h1>
+        <h1 className="font-display text-3xl font-bold text-ink-primary">Resume Studio</h1>
         <div className="card">
           <StepResume onComplete={() => { setShowReupload(false); load() }} />
         </div>
         <div className="relative flex items-center gap-3">
           <div className="flex-1 border-t border-surface-600" />
-          <span className="text-xs text-gray-500 uppercase">or</span>
+          <span className="text-xs text-ink-muted uppercase">or</span>
           <div className="flex-1 border-t border-surface-600" />
         </div>
         <div className="card p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-white">Import from LinkedIn</h3>
+          <h3 className="font-display text-sm font-semibold text-ink-primary">Import from LinkedIn</h3>
           <div className="space-y-2">
             <input
               type="url"
@@ -149,7 +149,7 @@ export default function ResumeStudio() {
             />
             {showPasteArea && (
               <>
-                <p className="text-xs text-yellow-400">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
+                <p className="text-xs text-warning">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
                 <textarea
                   className="input text-sm h-32"
                   placeholder="Go to your LinkedIn profile → Select All (Cmd+A) → Copy (Cmd+C) → Paste here"
@@ -178,15 +178,15 @@ export default function ResumeStudio() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Resume Studio</h1>
-          <p className="text-gray-400 text-sm mt-1">{resume.original_filename} · uploaded {new Date(resume.created_at).toLocaleDateString()}</p>
+          <h1 className="font-display text-3xl font-bold text-ink-primary">Resume Studio</h1>
+          <p className="text-ink-muted text-sm mt-1">{resume.original_filename} · uploaded {new Date(resume.created_at).toLocaleDateString()}</p>
         </div>
         <button onClick={() => setShowReupload(true)} className="btn-ghost text-sm">Replace resume</button>
       </div>
 
       {/* LinkedIn Import */}
       <div className="card p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-white">Import from LinkedIn</h3>
+        <h3 className="font-display text-sm font-semibold text-ink-primary">Import from LinkedIn</h3>
         <div className="space-y-2">
           <input
             type="url"
@@ -197,7 +197,7 @@ export default function ResumeStudio() {
           />
           {showPasteArea && (
             <>
-              <p className="text-xs text-yellow-400">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
+              <p className="text-xs text-warning">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
               <textarea
                 className="input text-sm h-32"
                 placeholder="Go to your LinkedIn profile → Select All (Cmd+A) → Copy (Cmd+C) → Paste here"
@@ -217,7 +217,7 @@ export default function ResumeStudio() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-surface-600">
+      <div className="flex gap-0 border-b border-surface-600">
         {[
           { key: 'master',    label: 'Master Resume' },
           { key: 'linkedin',  label: 'LinkedIn Copy' },
@@ -226,8 +226,10 @@ export default function ResumeStudio() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              tab === t.key ? 'border-brand text-white' : 'border-transparent text-gray-400 hover:text-white'
+            className={`px-4 py-2.5 text-sm transition-colors border-b-2 -mb-px ${
+              tab === t.key
+                ? 'border-cobalt text-ink-primary font-semibold font-display'
+                : 'border-transparent text-ink-muted hover:text-ink-primary'
             }`}
           >
             {t.label}
@@ -239,10 +241,10 @@ export default function ResumeStudio() {
       {tab === 'master' && (
         <div className="card">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">ATS-Optimized Master Resume</p>
+            <p className="section-label">ATS-Optimized Master Resume</p>
             <button
               onClick={() => navigator.clipboard.writeText(resume.master_resume_text || '')}
-              className="text-xs text-brand-light hover:underline"
+              className="text-xs text-cobalt-light hover:underline"
             >
               Copy to clipboard
             </button>
@@ -253,9 +255,9 @@ export default function ResumeStudio() {
             </div>
           ) : (
             <div className="text-center py-8 space-y-2">
-              <p className="text-sm text-gray-400">Master resume not yet generated.</p>
-              <p className="text-xs text-gray-500">
-                Add your <code className="text-brand-light">ANTHROPIC_API_KEY</code> to <code className="text-brand-light">worker/.dev.vars</code>, restart the worker, then click <strong className="text-white">Replace resume</strong> to re-upload.
+              <p className="text-sm text-ink-muted">Master resume not yet generated.</p>
+              <p className="text-xs text-ink-muted">
+                Add your <code className="text-cobalt-light bg-surface-900 px-1 rounded text-xs font-mono">ANTHROPIC_API_KEY</code> to <code className="text-cobalt-light bg-surface-900 px-1 rounded text-xs font-mono">worker/.dev.vars</code>, restart the worker, then click <strong className="text-ink-primary">Replace resume</strong> to re-upload.
               </p>
             </div>
           )}
@@ -267,23 +269,27 @@ export default function ResumeStudio() {
         <div className="space-y-4">
           {resume.linkedin_about && (
             <div className="card">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">LinkedIn About Section</p>
-              <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{resume.linkedin_about}</p>
-              <button onClick={() => navigator.clipboard.writeText(resume.linkedin_about)} className="text-xs text-brand-light hover:underline mt-2">Copy</button>
+              <p className="section-label mb-2">LinkedIn About Section</p>
+              <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{resume.linkedin_about}</p>
+              <button onClick={() => navigator.clipboard.writeText(resume.linkedin_about)} className="text-xs text-cobalt-light hover:underline mt-2">Copy</button>
             </div>
           )}
           {linkedin?.headline && (
             <div className="card">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">LinkedIn Headline</p>
-              <p className="text-sm text-gray-300">{linkedin.headline}</p>
-              <button onClick={() => navigator.clipboard.writeText(linkedin.headline)} className="text-xs text-brand-light hover:underline mt-2">Copy</button>
+              <p className="section-label mb-2">LinkedIn Headline</p>
+              <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{linkedin.headline}</p>
+              <button onClick={() => navigator.clipboard.writeText(linkedin.headline)} className="text-xs text-cobalt-light hover:underline mt-2">Copy</button>
             </div>
           )}
           {linkedin?.bullets && Object.entries(linkedin.bullets).map(([role, bullets]) => (
             <div key={role} className="card">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{role}</p>
+              <p className="section-label mb-2">{role}</p>
               <ul className="space-y-1">
-                {bullets.map((b, i) => <li key={i} className="text-sm text-gray-300 flex gap-2"><span className="text-brand-light shrink-0">•</span>{b}</li>)}
+                {bullets.map((b, i) => (
+                  <li key={i} className="text-sm text-ink-secondary leading-relaxed flex gap-2">
+                    <span className="text-cobalt-light shrink-0">•</span>{b}
+                  </li>
+                ))}
               </ul>
             </div>
           ))}
@@ -294,20 +300,20 @@ export default function ResumeStudio() {
       {tab === 'parsed' && parsed && (
         <div className="space-y-4">
           <div className="card">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Skills ({parsed.skills?.length || 0})</p>
+            <p className="section-label mb-2">Skills ({parsed.skills?.length || 0})</p>
             <div className="flex flex-wrap gap-1.5">
               {(parsed.skills || []).map(s => (
-                <span key={s} className="badge badge-purple">{s}</span>
+                <span key={s} className="badge-cobalt">{s}</span>
               ))}
             </div>
           </div>
           <div className="card">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Experience</p>
+            <p className="section-label mb-3">Experience</p>
             <div className="space-y-3">
               {(parsed.experience || []).map((exp, i) => (
                 <div key={i}>
-                  <p className="font-medium text-white text-sm">{exp.title}</p>
-                  <p className="text-xs text-gray-400">{exp.company} · {exp.start_date} – {exp.end_date || 'Present'}</p>
+                  <p className="font-semibold text-ink-primary text-sm">{exp.title}</p>
+                  <p className="text-xs text-ink-muted">{exp.company} · {exp.start_date} – {exp.end_date || 'Present'}</p>
                 </div>
               ))}
             </div>

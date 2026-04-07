@@ -4,19 +4,24 @@ import { dashboardApi, jobsApi, alertsApi } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { toast } from 'react-toastify'
 
-function StatCard({ label, value, color = 'text-white', sub }) {
+function StatCard({ label, value, color = 'text-ink-primary', sub }) {
   return (
     <div className="card flex flex-col gap-1">
-      <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
-      <p className={`text-3xl font-bold ${color}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-600">{sub}</p>}
+      <p className="section-label">{label}</p>
+      <p className={`font-display text-4xl font-bold ${color}`}>{value}</p>
+      {sub && <p className="text-xs text-ink-muted">{sub}</p>}
     </div>
   )
 }
 
 function FitPill({ score }) {
-  const color = score >= 80 ? 'bg-success/15 text-success' : score >= 65 ? 'bg-warning/15 text-warning' : 'bg-danger/15 text-danger'
-  return <span className={`fit-pill ${color}`}>{score}%</span>
+  const color =
+    score >= 80
+      ? 'bg-success/15 text-success'
+      : score >= 65
+      ? 'bg-warning/15 text-warning'
+      : 'bg-signal/15 text-signal'
+  return <span className={`fit-pill font-display font-bold ${color}`}>{score}%</span>
 }
 
 export default function Dashboard() {
@@ -160,8 +165,11 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-gray-400 text-sm mt-1">Hey {user?.first_name} — here's your hunt status</p>
+          <h1 className="font-display text-3xl font-bold text-ink-primary">Dashboard</h1>
+          <p className="text-ink-secondary text-sm mt-1 flex items-center gap-1.5">
+            <span className="glow-dot" />
+            Hey {user?.first_name} — here's your hunt status
+          </p>
         </div>
       </div>
 
@@ -181,18 +189,18 @@ export default function Dashboard() {
         </form>
         <div className="flex items-center gap-2">
           <div className="h-px flex-1 bg-surface-600" />
-          <span className="text-xs text-gray-600">or</span>
+          <span className="text-xs text-ink-muted">or</span>
           <div className="h-px flex-1 bg-surface-600" />
         </div>
         <div className="flex gap-3">
           <button
             onClick={seedJobs}
             disabled={seeding || findingReal}
-            className="flex-1 btn-ghost text-sm flex items-center justify-center gap-2"
+            className="flex-1 btn-ghost text-sm flex items-center justify-center gap-2 border border-surface-600 hover:border-cobalt"
           >
             {seeding ? (
               <>
-                <span className="w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                <span className="w-3.5 h-3.5 border-2 border-cobalt border-t-transparent rounded-full animate-spin" />
                 Generating sample jobs… (~30s)
               </>
             ) : (
@@ -202,11 +210,11 @@ export default function Dashboard() {
           <button
             onClick={findRealJobs}
             disabled={findingReal || seeding}
-            className="flex-1 btn-ghost text-sm flex items-center justify-center gap-2"
+            className="flex-1 btn-ghost text-sm flex items-center justify-center gap-2 border border-surface-600 hover:border-cobalt"
           >
             {findingReal ? (
               <>
-                <span className="w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                <span className="w-3.5 h-3.5 border-2 border-cobalt border-t-transparent rounded-full animate-spin" />
                 Finding & scoring real jobs… (~30s)
               </>
             ) : (
@@ -244,8 +252,8 @@ export default function Dashboard() {
       {/* Job Alerts */}
       <div className="card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-white">Job Alerts</h3>
-          <span className="text-xs text-gray-500">Runs daily at 8 AM UTC</span>
+          <h3 className="font-display font-semibold text-ink-primary">Job Alerts</h3>
+          <span className="text-xs text-ink-muted">Runs daily at 8 AM UTC</span>
         </div>
 
         <div className="flex gap-2 mb-3">
@@ -267,22 +275,22 @@ export default function Dashboard() {
         </div>
 
         {alerts.length === 0 ? (
-          <p className="text-xs text-gray-600">No alerts yet. Save a search to get daily job updates.</p>
+          <p className="text-xs text-ink-muted">No alerts yet. Save a search to get daily job updates.</p>
         ) : (
           <div className="space-y-2">
             {alerts.map(a => (
               <div key={a.id} className="flex items-center justify-between text-sm">
                 <div className="flex-1 min-w-0">
-                  <span className={a.is_active ? 'text-gray-300' : 'text-gray-600 line-through'}>{a.keywords}</span>
+                  <span className={a.is_active ? 'text-ink-secondary' : 'text-ink-muted line-through'}>{a.keywords}</span>
                   {a.last_run_at && (
-                    <span className="text-xs text-gray-600 ml-2">Last run: {new Date(a.last_run_at).toLocaleDateString()}</span>
+                    <span className="text-xs text-ink-muted ml-2">Last run: {new Date(a.last_run_at).toLocaleDateString()}</span>
                   )}
                 </div>
                 <div className="flex gap-2 ml-3 shrink-0">
-                  <button onClick={() => toggleAlert(a.id)} className="text-xs text-gray-500 hover:text-white">
+                  <button onClick={() => toggleAlert(a.id)} className="text-xs text-ink-muted hover:text-ink-primary">
                     {a.is_active ? 'Pause' : 'Resume'}
                   </button>
-                  <button onClick={() => deleteAlert(a.id)} className="text-xs text-red-500 hover:text-red-400">
+                  <button onClick={() => deleteAlert(a.id)} className="text-xs text-signal hover:text-signal-light">
                     Delete
                   </button>
                 </div>
@@ -295,9 +303,9 @@ export default function Dashboard() {
       {/* Stats grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Applied" value={counts.applied || 0} color="text-success" />
-        <StatCard label="Ready to apply" value={(counts.scored || 0) + (counts.ready || 0)} color="text-brand-light" />
+        <StatCard label="Ready to apply" value={(counts.scored || 0) + (counts.ready || 0)} color="text-cobalt-light" />
         <StatCard label="Needs you" value={counts.needs_manual || 0} color="text-warning" />
-        <StatCard label="Expired / gone" value={counts.expired || 0} color="text-gray-500" />
+        <StatCard label="Expired / gone" value={counts.expired || 0} color="text-ink-muted" />
       </div>
 
       {/* Two columns */}
@@ -305,23 +313,23 @@ export default function Dashboard() {
         {/* Top jobs */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-white">Top matches</h2>
-            <Link to="/jobs" className="text-xs text-brand-light hover:underline">View all →</Link>
+            <h2 className="font-display font-semibold text-ink-primary">Top matches</h2>
+            <Link to="/dashboard/jobs" className="text-xs text-cobalt-light hover:underline">View all →</Link>
           </div>
           <div className="space-y-2">
             {(data?.top_jobs?.length ? data.top_jobs : []).map(job => (
-              <div key={job.id} className="card flex items-center gap-3 hover:border-brand/40 transition-all group">
+              <div key={job.id} className="card-hover flex items-center gap-3 hover:border-cobalt/40 transition-all group">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white text-sm truncate">{job.title}</p>
-                  <p className="text-xs text-gray-500 truncate">
+                  <p className="font-semibold text-ink-primary text-sm truncate">{job.title}</p>
+                  <p className="text-xs text-ink-muted truncate">
                     {job.company} · {job.location}
-                    {job.source && <span className="ml-1 text-gray-600">({job.source})</span>}
+                    {job.source && <span className="ml-1 text-ink-muted">({job.source})</span>}
                   </p>
                 </div>
                 <FitPill score={job.fit_score} />
                 <button
                   onClick={() => flagJob(job.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-600 hover:text-danger rounded"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-ink-muted hover:text-signal rounded"
                   title="Dismiss job"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -331,7 +339,7 @@ export default function Dashboard() {
               </div>
             ))}
             {!data?.top_jobs?.length && (
-              <div className="card text-center py-8 text-gray-600 text-sm">
+              <div className="card text-center py-8 text-ink-muted text-sm">
                 Run a job search to see matches here
               </div>
             )}
@@ -341,21 +349,21 @@ export default function Dashboard() {
         {/* Recent blockers */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-white">Needs manual attention</h2>
-            <Link to="/applications" className="text-xs text-brand-light hover:underline">View all →</Link>
+            <h2 className="font-display font-semibold text-ink-primary">Needs manual attention</h2>
+            <Link to="/dashboard/applications" className="text-xs text-cobalt-light hover:underline">View all →</Link>
           </div>
           <div className="space-y-2">
             {(data?.recent_blockers?.length ? data.recent_blockers : []).map(b => (
               <div key={b.id} className="card flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white text-sm truncate">{b.title}</p>
-                  <p className="text-xs text-gray-500">{b.company}</p>
+                  <p className="font-semibold text-ink-primary text-sm truncate">{b.title}</p>
+                  <p className="text-xs text-ink-muted">{b.company}</p>
                 </div>
                 <span className="badge badge-amber capitalize">{b.reason?.replace(/_/g, ' ')}</span>
               </div>
             ))}
             {!data?.recent_blockers?.length && (
-              <div className="card text-center py-8 text-gray-600 text-sm">
+              <div className="card text-center py-8 text-ink-muted text-sm">
                 No blockers yet
               </div>
             )}
@@ -367,32 +375,32 @@ export default function Dashboard() {
       {data?.recent_applications?.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-white">Recent applications</h2>
-            <Link to="/applications" className="text-xs text-brand-light hover:underline">View all →</Link>
+            <h2 className="font-display font-semibold text-ink-primary">Recent applications</h2>
+            <Link to="/dashboard/applications" className="text-xs text-cobalt-light hover:underline">View all →</Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-gray-500 border-b border-surface-600">
-                  <th className="pb-2 font-medium">Role</th>
-                  <th className="pb-2 font-medium">Company</th>
-                  <th className="pb-2 font-medium">Fit</th>
-                  <th className="pb-2 font-medium">Method</th>
-                  <th className="pb-2 font-medium">Date</th>
+                <tr className="text-left border-b border-surface-600">
+                  <th className="pb-2 font-medium text-xs text-ink-muted uppercase tracking-wider">Role</th>
+                  <th className="pb-2 font-medium text-xs text-ink-muted uppercase tracking-wider">Company</th>
+                  <th className="pb-2 font-medium text-xs text-ink-muted uppercase tracking-wider">Fit</th>
+                  <th className="pb-2 font-medium text-xs text-ink-muted uppercase tracking-wider">Method</th>
+                  <th className="pb-2 font-medium text-xs text-ink-muted uppercase tracking-wider">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-600">
                 {data.recent_applications.map(app => (
-                  <tr key={app.id} className="text-gray-300">
-                    <td className="py-2.5 font-medium text-white">{app.title}</td>
-                    <td className="py-2.5 text-gray-400">{app.company}</td>
+                  <tr key={app.id} className="text-ink-secondary">
+                    <td className="py-2.5 font-medium text-ink-primary">{app.title}</td>
+                    <td className="py-2.5 text-ink-muted">{app.company}</td>
                     <td className="py-2.5"><FitPill score={app.fit_score} /></td>
                     <td className="py-2.5">
-                      <span className={`badge ${app.method === 'auto' ? 'badge-green' : 'badge-blue'}`}>
+                      <span className={`badge ${app.method === 'auto' ? 'badge-green' : 'badge-cobalt'}`}>
                         {app.method}
                       </span>
                     </td>
-                    <td className="py-2.5 text-gray-500">{new Date(app.applied_at).toLocaleDateString()}</td>
+                    <td className="py-2.5 text-ink-muted">{new Date(app.applied_at).toLocaleDateString()}</td>
                   </tr>
                 ))}
               </tbody>
