@@ -78,9 +78,9 @@ export default function StepResume({ onComplete }) {
     <form onSubmit={handleSubmit} className="space-y-5">
       <div
         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-          dragOver ? 'border-brand bg-brand/5' :
+          dragOver ? 'border-cobalt bg-cobalt/5' :
           file ? 'border-success bg-success/5' :
-          'border-surface-600 hover:border-brand/50'
+          'border-surface-600 hover:border-cobalt/50'
         }`}
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -92,33 +92,33 @@ export default function StepResume({ onComplete }) {
         {file ? (
           <div>
             <div className="text-2xl mb-2">📄</div>
-            <p className="font-medium text-white">{file.name}</p>
-            <p className="text-xs text-gray-500 mt-1">{(file.size / 1024).toFixed(0)} KB · PDF</p>
+            <p className="font-medium text-ink-primary">{file.name}</p>
+            <p className="text-xs text-ink-muted mt-1">{(file.size / 1024).toFixed(0)} KB · PDF</p>
             <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null) }}
-              className="text-xs text-gray-500 hover:text-danger mt-2 underline">
+              className="text-xs text-ink-muted hover:text-signal mt-2 underline">
               Remove
             </button>
           </div>
         ) : (
           <div>
             <div className="text-3xl mb-3">📤</div>
-            <p className="text-white font-medium">Drop your resume here</p>
-            <p className="text-gray-500 text-sm mt-1">or click to browse · PDF only · max 5MB</p>
+            <p className="text-ink-primary font-medium">Drop your resume here</p>
+            <p className="text-ink-muted text-sm mt-1">or click to browse · PDF only · max 5MB</p>
           </div>
         )}
       </div>
 
       {loading && (
         <div className="bg-surface-900 rounded-lg p-3 flex items-center gap-3">
-          <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin shrink-0" />
-          <p className="text-sm text-gray-300">
+          <div className="w-4 h-4 border-2 border-cobalt border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-ink-secondary">
             {stage === 'parsing' ? 'Extracting resume text…' : 'Claude is building your master resume and LinkedIn copy…'}
           </p>
         </div>
       )}
 
-      <div className="text-xs text-gray-500 bg-surface-900 rounded-lg p-3">
-        <p className="font-medium text-gray-400 mb-1">What happens next:</p>
+      <div className="text-xs text-ink-muted bg-surface-900 rounded-lg p-3">
+        <p className="font-medium text-ink-secondary mb-1">What happens next:</p>
         <ul className="space-y-1 list-disc list-inside">
           <li>Claude parses your skills, experience, and education</li>
           <li>Generates a polished ATS-optimized master resume</li>

@@ -31,13 +31,13 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4">
       <div className="w-full max-w-xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-10 h-10 bg-brand rounded-lg flex items-center justify-center text-white font-bold mx-auto mb-4">B</div>
-          <h1 className="text-2xl font-bold text-white">{STEPS[step]?.label}</h1>
-          <p className="text-gray-400 text-sm mt-1">{STEPS[step]?.subtitle}</p>
+          <div className="w-10 h-10 bg-gradient-cobalt rounded-lg flex items-center justify-center text-ink-primary font-bold mx-auto mb-4">B</div>
+          <h1 className="text-2xl font-display font-bold text-ink-primary">{STEPS[step]?.label}</h1>
+          <p className="text-ink-muted text-sm mt-1">{STEPS[step]?.subtitle}</p>
         </div>
 
         {/* Step indicator */}
@@ -46,8 +46,8 @@ export default function Onboarding() {
             <div key={i} className="flex items-center gap-2">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                 i < step ? 'bg-success text-white' :
-                i === step ? 'bg-brand text-white' :
-                'bg-surface-700 text-gray-500'
+                i === step ? 'bg-cobalt text-ink-primary' :
+                'bg-surface-700 text-ink-muted'
               }`}>
                 {i < step ? '✓' : i + 1}
               </div>

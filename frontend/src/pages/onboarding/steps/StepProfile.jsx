@@ -27,7 +27,7 @@ export default function StepProfile({ onComplete }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="label">Phone <span className="text-gray-600">(optional)</span></label>
+          <label className="label">Phone <span className="text-ink-muted">(optional)</span></label>
           <input type="tel" className="input" placeholder="+1 555-000-0000" value={form.phone} onChange={set('phone')} />
         </div>
         <div>
@@ -37,7 +37,7 @@ export default function StepProfile({ onComplete }) {
       </div>
 
       <div>
-        <label className="label">LinkedIn URL <span className="text-gray-600">(optional)</span></label>
+        <label className="label">LinkedIn URL <span className="text-ink-muted">(optional)</span></label>
         <input type="url" className="input" placeholder="https://linkedin.com/in/yourprofile" value={form.linkedin_url} onChange={set('linkedin_url')} />
       </div>
 

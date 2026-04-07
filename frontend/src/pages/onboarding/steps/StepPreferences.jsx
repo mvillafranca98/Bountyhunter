@@ -56,13 +56,13 @@ export default function StepPreferences({ onComplete }) {
                 onChange={e => updateRole(i, 'industry', e.target.value)}
               />
               {roles.length > 1 && (
-                <button type="button" onClick={() => removeRole(i)} className="text-gray-500 hover:text-danger px-1">✕</button>
+                <button type="button" onClick={() => removeRole(i)} className="text-ink-muted hover:text-signal px-1">✕</button>
               )}
             </div>
           ))}
         </div>
         {roles.length < 5 && (
-          <button type="button" onClick={addRole} className="text-sm text-brand-light hover:underline mt-2">+ Add role</button>
+          <button type="button" onClick={addRole} className="text-sm text-cobalt-light hover:underline mt-2">+ Add role</button>
         )}
       </div>
 
@@ -71,7 +71,7 @@ export default function StepPreferences({ onComplete }) {
         <div className="flex items-center justify-between mb-2">
           <label className="label mb-0">Salary range</label>
           <select
-            className="text-xs bg-surface-900 border border-surface-600 rounded px-2 py-1 text-gray-300"
+            className="text-xs bg-surface-900 border border-surface-600 rounded px-2 py-1 text-ink-secondary"
             value={salary.preferred_type}
             onChange={e => setSalary(p => ({ ...p, preferred_type: e.target.value }))}
           >
@@ -114,26 +114,26 @@ export default function StepPreferences({ onComplete }) {
       <div className="bg-surface-900 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-white">Auto-apply mode</p>
-            <p className="text-xs text-gray-500 mt-0.5">Automatically submit applications above the fit threshold</p>
+            <p className="text-sm font-medium text-ink-primary">Auto-apply mode</p>
+            <p className="text-xs text-ink-muted mt-0.5">Automatically submit applications above the fit threshold</p>
           </div>
           <button
             type="button"
             onClick={() => setAutoApply(v => !v)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${autoApply ? 'bg-brand' : 'bg-surface-600'}`}
+            className={`relative w-10 h-5 rounded-full transition-colors ${autoApply ? 'bg-cobalt' : 'bg-surface-600'}`}
           >
             <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoApply ? 'translate-x-5' : 'translate-x-0.5'}`} />
           </button>
         </div>
         <div>
-          <label className="label text-xs">Fit score threshold: <span className="text-brand-light">{fitThreshold}%</span></label>
+          <label className="label text-xs">Fit score threshold: <span className="text-cobalt-light">{fitThreshold}%</span></label>
           <input
             type="range" min={50} max={95} step={5}
-            className="w-full accent-brand"
+            className="w-full accent-cobalt"
             value={fitThreshold}
             onChange={e => setFitThreshold(Number(e.target.value))}
           />
-          <div className="flex justify-between text-xs text-gray-600 mt-0.5">
+          <div className="flex justify-between text-xs text-ink-muted mt-0.5">
             <span>50% (more apps)</span><span>95% (fewer, better)</span>
           </div>
         </div>

@@ -11,19 +11,32 @@ const navItems = [
   { to: '/dashboard/profile',      label: 'Profile',      icon: UserIcon },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
   return (
-    <aside className="w-56 flex flex-col bg-surface-950 border-r border-surface-600 shrink-0">
+    <aside
+      className={`fixed lg:relative inset-y-0 left-0 z-30 w-64 lg:w-56 flex flex-col bg-surface-950 border-r border-surface-600 shrink-0 transition-transform duration-300 ease-in-out ${
+        isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      }`}
+    >
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-surface-600">
+      <div className="px-4 py-5 border-b border-surface-600 relative">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-gradient-cobalt rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0">B</div>
           <span className="font-display font-semibold text-ink-primary tracking-tight">BountyHunter</span>
         </div>
         <p className="text-xs text-ink-muted mt-1 ml-9">AI Job Copilot</p>
+        {/* Mobile close button */}
+        <button
+          onClick={onClose}
+          className="lg:hidden absolute top-4 right-4 p-1.5 text-ink-muted hover:text-ink-primary rounded-lg hover:bg-surface-800 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}
@@ -32,6 +45,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 text-sm transition-colors duration-100 rounded-r-lg ${
                 isActive
