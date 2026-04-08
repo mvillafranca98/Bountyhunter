@@ -130,17 +130,25 @@ async function fetchRemotive(keywords) {
   )
   if (!res.ok) throw new Error(`Remotive API returned ${res.status}`)
   const json = await res.json()
-  return (json.jobs || []).slice(0, 5).map(job => ({
-    title: job.title,
-    company: job.company_name,
-    location: job.candidate_required_location || '',
-    url: job.url || `https://remotive.com/remote-jobs/${job.id}`,
-    description: cleanDescription(job.description),
-    source: 'remotive',
-    external_id: String(job.id),
-    salary: job.salary || null,
-    posted_at: job.publication_date || null,
-  }))
+  return (json.jobs || []).slice(0, 5).map(job => {
+    const location = job.candidate_required_location || ''
+    const description = cleanDescription(job.description)
+    const { requires_subscription, subscription_hint } = detectSubscription('remotive', job.url, description)
+    return {
+      title: job.title,
+      company: job.company_name,
+      location,
+      url: job.url || `https://remotive.com/remote-jobs/${job.id}`,
+      description,
+      source: 'remotive',
+      external_id: String(job.id),
+      salary: job.salary || null,
+      posted_at: job.publication_date || null,
+      work_type: inferWorkType(location, description),
+      requires_subscription,
+      subscription_hint,
+    }
+  })
 }
 
 // ─── Helper: fetch from JSearch / RapidAPI (covers Indeed, LinkedIn, etc.) ────
@@ -158,18 +166,24 @@ async function fetchJSearch(keywords, rapidApiKey) {
   const json = await res.json()
   return (json.data || []).slice(0, 5).map(job => {
     const parts = [job.job_city, job.job_state, job.job_country].filter(Boolean)
+    const location = parts.join(', ')
+    const description = cleanDescription(job.job_description)
+    const { requires_subscription, subscription_hint } = detectSubscription('jsearch', job.job_apply_link, description)
     return {
       title: job.job_title,
       company: job.employer_name,
-      location: parts.join(', '),
+      location,
       url: job.job_apply_link,
-      description: cleanDescription(job.job_description),
+      description,
       source: 'jsearch',
       external_id: job.job_id,
       salary: job.job_min_salary && job.job_max_salary
         ? `${job.job_min_salary}-${job.job_max_salary}`
         : null,
       posted_at: job.job_posted_at_datetime_utc || null,
+      work_type: inferWorkType(location, description),
+      requires_subscription,
+      subscription_hint,
     }
   })
 }
@@ -184,17 +198,25 @@ async function fetchArbeitnow(keywords) {
     const text = `${job.title} ${job.description} ${(job.tags || []).join(' ')}`.toLowerCase()
     return lowerKeywords.some(kw => text.includes(kw))
   })
-  return filtered.slice(0, 5).map(job => ({
-    title: job.title,
-    company: job.company_name,
-    location: job.location || '',
-    url: job.url || `https://www.arbeitnow.com/view/${job.slug}`,
-    description: cleanDescription(job.description),
-    source: 'arbeitnow',
-    external_id: job.slug,
-    salary: null,
-    posted_at: job.created_at || null,
-  }))
+  return filtered.slice(0, 5).map(job => {
+    const location = job.location || ''
+    const description = cleanDescription(job.description)
+    const { requires_subscription, subscription_hint } = detectSubscription('arbeitnow', job.url, description)
+    return {
+      title: job.title,
+      company: job.company_name,
+      location,
+      url: job.url || `https://www.arbeitnow.com/view/${job.slug}`,
+      description,
+      source: 'arbeitnow',
+      external_id: job.slug,
+      salary: null,
+      posted_at: job.created_at || null,
+      work_type: inferWorkType(location, description),
+      requires_subscription,
+      subscription_hint,
+    }
+  })
 }
 
 // ─── Helper: fetch from RemoteOK (free, no key) ─────────────────────────────
@@ -213,17 +235,25 @@ async function fetchRemoteOK(keywords) {
       (job.tags || []).some(t => t.toLowerCase().includes(kw))
     ))
     .slice(0, 5)
-    .map(job => ({
-      title: job.position,
-      company: job.company,
-      location: job.location || 'Remote',
-      url: job.url || `https://remoteok.com/l/${job.id}`,
-      description: cleanDescription(job.description),
-      source: 'remoteok',
-      external_id: String(job.id),
-      salary: job.salary_min && job.salary_max ? `$${job.salary_min}-$${job.salary_max}` : null,
-      posted_at: job.date || null,
-    }))
+    .map(job => {
+      const location = job.location || 'Remote'
+      const description = cleanDescription(job.description)
+      const { requires_subscription, subscription_hint } = detectSubscription('remoteok', job.url, description)
+      return {
+        title: job.position,
+        company: job.company,
+        location,
+        url: job.url || `https://remoteok.com/l/${job.id}`,
+        description,
+        source: 'remoteok',
+        external_id: String(job.id),
+        salary: job.salary_min && job.salary_max ? `$${job.salary_min}-$${job.salary_max}` : null,
+        posted_at: job.date || null,
+        work_type: 'remote',
+        requires_subscription,
+        subscription_hint,
+      }
+    })
 }
 
 // ─── Helper: fetch from The Muse (free, no key) ─────────────────────────────
@@ -233,17 +263,26 @@ async function fetchTheMuse(keywords) {
   )
   if (!res.ok) throw new Error(`The Muse API returned ${res.status}`)
   const json = await res.json()
-  return (json.results || []).slice(0, 5).map(job => ({
-    title: job.name,
-    company: job.company?.name || '',
-    location: (job.locations || []).map(l => l.name).join(', ') || 'Various',
-    url: job.refs?.landing_page || `https://www.themuse.com/jobs/${job.id}`,
-    description: cleanDescription(job.contents),
-    source: 'themuse',
-    external_id: String(job.id),
-    salary: null,
-    posted_at: job.publication_date || null,
-  }))
+  return (json.results || []).slice(0, 5).map(job => {
+    const location = (job.locations || []).map(l => l.name).join(', ') || 'Various'
+    const description = cleanDescription(job.contents)
+    const jobUrl = job.refs?.landing_page || `https://www.themuse.com/jobs/${job.id}`
+    const { requires_subscription, subscription_hint } = detectSubscription('themuse', jobUrl, description)
+    return {
+      title: job.name,
+      company: job.company?.name || '',
+      location,
+      url: jobUrl,
+      description,
+      source: 'themuse',
+      external_id: String(job.id),
+      salary: null,
+      posted_at: job.publication_date || null,
+      work_type: inferWorkType(location, description),
+      requires_subscription,
+      subscription_hint,
+    }
+  })
 }
 
 // ─── Helper: fetch from Jobicy (free, no key) ───────────────────────────────
@@ -253,19 +292,27 @@ async function fetchJobicy(keywords) {
   )
   if (!res.ok) throw new Error(`Jobicy API returned ${res.status}`)
   const json = await res.json()
-  return (json.jobs || []).slice(0, 5).map(job => ({
-    title: job.jobTitle,
-    company: job.companyName,
-    location: job.jobGeo || 'Remote',
-    url: job.url,
-    description: cleanDescription(job.jobDescription),
-    source: 'jobicy',
-    external_id: String(job.id),
-    salary: job.annualSalaryMin && job.annualSalaryMax
-      ? `$${job.annualSalaryMin}-$${job.annualSalaryMax}`
-      : null,
-    posted_at: job.pubDate || null,
-  }))
+  return (json.jobs || []).slice(0, 5).map(job => {
+    const location = job.jobGeo || 'Remote'
+    const description = cleanDescription(job.jobDescription)
+    const { requires_subscription, subscription_hint } = detectSubscription('jobicy', job.url, description)
+    return {
+      title: job.jobTitle,
+      company: job.companyName,
+      location,
+      url: job.url,
+      description,
+      source: 'jobicy',
+      external_id: String(job.id),
+      salary: job.annualSalaryMin && job.annualSalaryMax
+        ? `$${job.annualSalaryMin}-$${job.annualSalaryMax}`
+        : null,
+      posted_at: job.pubDate || null,
+      work_type: inferWorkType(location, description),
+      requires_subscription,
+      subscription_hint,
+    }
+  })
 }
 
 // ─── Helper: fetch from HackerNews "Who's Hiring" ──────────────────────────
@@ -302,17 +349,23 @@ async function fetchHackerNews(keywords) {
       const locationPart = parts.find(p => /remote/i.test(p)) || (parts.length > 2 ? parts[2] : '')
       const urlMatch = text.match(/href="([^"]+)"/) || text.match(/(https?:\/\/[^\s<"]+)/)
       const url = urlMatch ? urlMatch[1] : `https://news.ycombinator.com/item?id=${hit.objectID}`
+      const location = locationPart || ''
+      const description = cleanDescription(text).slice(0, 2000)
+      const { requires_subscription, subscription_hint } = detectSubscription('hackernews', url, description)
 
       return {
         title,
         company,
-        location: locationPart || '',
+        location,
         url,
-        description: cleanDescription(text).slice(0, 2000),
+        description,
         source: 'hackernews',
         external_id: String(hit.objectID),
         salary: null,
         posted_at: hit.created_at,
+        work_type: inferWorkType(location, description),
+        requires_subscription,
+        subscription_hint,
       }
     })
   } catch (err) {
@@ -329,17 +382,26 @@ async function fetchHimalayas(keywords) {
     )
     if (!res.ok) throw new Error(`Himalayas API returned ${res.status}`)
     const json = await res.json()
-    return (json.jobs || []).map(job => ({
-      title: job.title,
-      company: job.companyName,
-      location: job.locationRestrictions?.join(', ') || 'Remote',
-      url: `https://himalayas.app/jobs/${job.slug}`,
-      description: cleanDescription(job.description),
-      source: 'himalayas',
-      external_id: String(job.id),
-      salary: job.minSalary && job.maxSalary ? `$${job.minSalary}-${job.maxSalary}` : null,
-      posted_at: job.pubDate || null,
-    }))
+    return (json.jobs || []).map(job => {
+      const location = job.locationRestrictions?.join(', ') || 'Remote'
+      const description = cleanDescription(job.description)
+      const jobUrl = `https://himalayas.app/jobs/${job.slug}`
+      const { requires_subscription, subscription_hint } = detectSubscription('himalayas', jobUrl, description)
+      return {
+        title: job.title,
+        company: job.companyName,
+        location,
+        url: jobUrl,
+        description,
+        source: 'himalayas',
+        external_id: String(job.id),
+        salary: job.minSalary && job.maxSalary ? `$${job.minSalary}-${job.maxSalary}` : null,
+        posted_at: job.pubDate || null,
+        work_type: inferWorkType(location, description),
+        requires_subscription,
+        subscription_hint,
+      }
+    })
   } catch (err) {
     console.error('Himalayas fetch failed:', err.message)
     return []
@@ -354,17 +416,26 @@ async function fetchGoogleJobs(keywords, serpApiKey) {
     )
     if (!res.ok) throw new Error(`SerpAPI returned ${res.status}`)
     const json = await res.json()
-    return (json.jobs_results || []).slice(0, 10).map(job => ({
-      title: job.title,
-      company: job.company_name,
-      location: job.location,
-      url: job.apply_options?.[0]?.link || job.share_link || job.related_links?.[0]?.link,
-      description: cleanDescription(job.description),
-      source: 'google_jobs',
-      external_id: job.job_id,
-      salary: job.detected_extensions?.salary || null,
-      posted_at: job.detected_extensions?.posted_at || null,
-    }))
+    return (json.jobs_results || []).slice(0, 10).map(job => {
+      const location = job.location
+      const description = cleanDescription(job.description)
+      const jobUrl = job.apply_options?.[0]?.link || job.share_link || job.related_links?.[0]?.link
+      const { requires_subscription, subscription_hint } = detectSubscription('google_jobs', jobUrl, description)
+      return {
+        title: job.title,
+        company: job.company_name,
+        location,
+        url: jobUrl,
+        description,
+        source: 'google_jobs',
+        external_id: job.job_id,
+        salary: job.detected_extensions?.salary || null,
+        posted_at: job.detected_extensions?.posted_at || null,
+        work_type: inferWorkType(location, description),
+        requires_subscription,
+        subscription_hint,
+      }
+    })
   } catch (err) {
     console.error('Google Jobs fetch failed:', err.message)
     return []
@@ -380,6 +451,31 @@ function deduplicateJobs(jobs) {
     seen.add(key)
     return true
   })
+}
+
+// ─── Helper: infer work type from location + description ─────────────────────
+function inferWorkType(location, description) {
+  const text = `${location || ''} ${description || ''}`.toLowerCase()
+  if (/\bhybrid\b/.test(text)) return 'hybrid'
+  if (/\bon.?site\b|\bin.?office\b|\bin.?person\b|\boffice.?based\b|\bco.?located\b/.test(text)) return 'onsite'
+  if (/\bremote\b|\bwork.?from.?home\b|\bwfh\b|\bfully.?distributed\b|\btelework\b/.test(text)) return 'remote'
+  return 'unknown'
+}
+
+// ─── Helper: detect subscription/paywall requirement ─────────────────────────
+function detectSubscription(source, url, description) {
+  const desc = (description || '').toLowerCase()
+  const urlStr = (url || '').toLowerCase()
+  if (/requires.*subscription|premium.*members.*only|subscribe.*to.*view|sign up.*to.*apply|members.*only/i.test(desc)) {
+    return { requires_subscription: 1, subscription_hint: 'Subscription required to apply' }
+  }
+  if (source === 'jsearch' && urlStr.includes('linkedin.com')) {
+    if (/easy apply|apply with linkedin/i.test(desc)) {
+      return { requires_subscription: 0, subscription_hint: null }
+    }
+    return { requires_subscription: 1, subscription_hint: 'LinkedIn account required to apply' }
+  }
+  return { requires_subscription: 0, subscription_hint: null }
 }
 
 // POST /jobs/real-search — fetch real jobs from multiple sources in parallel
@@ -432,10 +528,6 @@ jobRoutes.post('/real-search', async (c) => {
   // Deduplicate and limit
   allJobs = deduplicateJobs(allJobs).slice(0, 15)
 
-  if (!allJobs.length) {
-    return c.json({ jobs: [], sources, message: `No jobs found for "${keywords}"` })
-  }
-
   // Optionally score top 5 with Claude if API key is available
   const hasAI = c.env.ANTHROPIC_API_KEY && !c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')
   let parsedResume = {}
@@ -468,6 +560,26 @@ jobRoutes.post('/real-search', async (c) => {
     jobSearchPrefs = await fetchUserPreferences(c.env.DB, userId)
   }
 
+  // Pre-filter by work type if user has a strict remote preference
+  if (jobSearchPrefs?.work_style === 'remote') {
+    const beforeFilter = allJobs.length
+    allJobs = allJobs.filter(job => job.work_type === 'remote' || job.work_type === 'unknown')
+    if (allJobs.length < beforeFilter) {
+      console.log(`Work type filter: removed ${beforeFilter - allJobs.length} non-remote jobs`)
+    }
+  }
+
+  // Filter out subscription jobs by default unless user has opted in
+  // (subscriptionFilter param can be 'include' to override)
+  const subscriptionFilter = body.subscriptionFilter || 'exclude'
+  if (subscriptionFilter === 'exclude') {
+    allJobs = allJobs.filter(job => !job.requires_subscription)
+  }
+
+  if (!allJobs.length) {
+    return c.json({ jobs: [], sources, message: `No jobs found for "${keywords}"` })
+  }
+
   // Insert into D1 and optionally score top 5
   const stmts = []
   const insertedJobs = []
@@ -495,15 +607,18 @@ jobRoutes.post('/real-search', async (c) => {
     stmts.push(
       c.env.DB.prepare(
         `INSERT OR IGNORE INTO jobs
-         (id, user_id, source, external_id, title, company, location, url, description, fit_score, fit_reasoning, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, user_id, source, external_id, title, company, location, url, description, fit_score, fit_reasoning, status, work_type, requires_subscription, subscription_hint)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         id, userId, job.source, job.external_id,
         job.title, job.company,
         job.location,
         job.url,
         job.description,
-        fitScore, fitReasoning, status
+        fitScore, fitReasoning, status,
+        job.work_type || 'unknown',
+        job.requires_subscription || 0,
+        job.subscription_hint || null
       )
     )
 
@@ -521,6 +636,9 @@ jobRoutes.post('/real-search', async (c) => {
       fit_score: fitScore,
       fit_reasoning: fitReasoning ? JSON.parse(fitReasoning) : null,
       status,
+      work_type: job.work_type || 'unknown',
+      requires_subscription: job.requires_subscription || 0,
+      subscription_hint: job.subscription_hint || null,
     })
   }
 
@@ -565,6 +683,18 @@ jobRoutes.get('/', async (c) => {
   if (status) {
     query += ' AND status = ?'
     bindings.push(status)
+  }
+
+  const workType = c.req.query('work_type')       // remote | hybrid | onsite
+  const showSubscription = c.req.query('subscription') // 'include' or undefined (default: exclude)
+
+  if (workType) {
+    query += ' AND work_type = ?'
+    bindings.push(workType)
+  }
+
+  if (showSubscription !== 'include') {
+    query += ' AND (requires_subscription = 0 OR requires_subscription IS NULL)'
   }
 
   // Sort order
@@ -831,11 +961,12 @@ ${textContent}`
   // 5. Insert into database
   const id = generateId()
   const externalId = 'url_' + url.replace(/[^a-zA-Z0-9]/g, '').slice(0, 100)
+  const importedWorkType = jobData.remote === true ? 'remote' : inferWorkType(jobData.location, jobData.description)
 
   await c.env.DB.prepare(
     `INSERT OR IGNORE INTO jobs
-     (id, user_id, source, external_id, title, company, location, url, description, fit_score, fit_reasoning, status)
-     VALUES (?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     (id, user_id, source, external_id, title, company, location, url, description, fit_score, fit_reasoning, status, work_type)
+     VALUES (?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     id, userId, externalId,
     jobData.title || 'Untitled Position',
@@ -843,7 +974,7 @@ ${textContent}`
     jobData.location || '',
     url,
     (jobData.description || '').slice(0, 4000),
-    fitScore, fitReasoning, status
+    fitScore, fitReasoning, status, importedWorkType
   ).run()
 
   return c.json({
@@ -860,6 +991,7 @@ ${textContent}`
       fit_score: fitScore,
       fit_reasoning: fitReasoning ? JSON.parse(fitReasoning) : null,
       status,
+      work_type: importedWorkType,
     },
     message: `Imported "${jobData.title}" at ${jobData.company}${fitScore ? ` — ${fitScore}% fit` : ''}`
   })

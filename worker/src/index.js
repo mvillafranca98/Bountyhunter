@@ -9,6 +9,7 @@ import { questionRoutes } from './routes/questions.js'
 import { dashboardRoutes } from './routes/dashboard.js'
 import { storageRoutes } from './routes/storage.js'
 import { alertRoutes } from './routes/alerts.js'
+import { companyRoutes } from './routes/companies.js'
 import { handleQueue } from './queue.js'
 import { ensureSavedSearchesTable } from './lib/savedSearches.js'
 
@@ -43,6 +44,7 @@ app.route('/questions', questionRoutes)
 app.route('/dashboard', dashboardRoutes)
 app.route('/storage', storageRoutes)
 app.route('/alerts', alertRoutes)
+app.route('/companies', companyRoutes)
 
 app.get('/health', (c) => c.json({ status: 'ok', env: c.env?.ENVIRONMENT || 'unknown' }))
 
@@ -60,6 +62,7 @@ export default {
     const db = env.DB
     await ensureSavedSearchesTable(db)
 
+    // ── Saved search alerts ────────────────────────────────────────────────────
     const alerts = await db.prepare(
       'SELECT * FROM saved_searches WHERE is_active = 1'
     ).all()
@@ -71,10 +74,35 @@ export default {
         keywords: alert.keywords,
         source: 'all',
       })
-
       await db.prepare(
         "UPDATE saved_searches SET last_run_at = datetime('now') WHERE id = ?"
       ).bind(alert.id).run()
+    }
+
+    // ── Company watchlist scan (Greenhouse / Lever / Ashby) ───────────────────
+    try {
+      const { results: watchlistRows } = await db.prepare(
+        `SELECT DISTINCT user_id FROM company_watchlist WHERE is_active = 1`
+      ).all()
+
+      for (const row of watchlistRows || []) {
+        const { results: companies } = await db.prepare(
+          'SELECT * FROM company_watchlist WHERE user_id = ? AND is_active = 1'
+        ).bind(row.user_id).all()
+
+        for (const company of companies) {
+          // Enqueue per-company scan so slow fetches don't block the cron
+          await env.JOB_QUEUE.send({
+            type: 'SCAN_COMPANY',
+            userId: row.user_id,
+            companyId: company.id,
+          }).catch(() => {})
+        }
+      }
+      console.log(`Cron: queued watchlist scans for ${(watchlistRows || []).length} users`)
+    } catch (e) {
+      // Table may not exist yet on first deploy — non-fatal
+      console.warn('Cron watchlist scan skipped:', e.message)
     }
 
     console.log(`Cron: processed ${(alerts.results || []).length} job alerts`)

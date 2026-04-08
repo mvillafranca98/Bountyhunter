@@ -144,84 +144,83 @@ Experience bullets should be achievement-focused (not just responsibilities).`
   return parseJSON(result)
 }
 
-// ─── Job Fit Scoring ───────────────────────────────────────────────────────────
+// ─── Job Fit Scoring (10-dimension) ───────────────────────────────────────────
 export async function scoreJobFit(apiKey, jobDescription, parsedResume, userPrefs, jobSearchPrefs) {
-  // jobSearchPrefs is optional — backwards compatible if not passed
   const prefs = jobSearchPrefs || {}
 
-  const system = `You are an expert job-fit analyst. Score how well this candidate matches the job posting.
-Return ONLY valid JSON:
+  const system = `You are an expert job-fit analyst. Score how well this candidate matches a job posting across 10 dimensions.
+Return ONLY valid JSON — no markdown, no explanation:
 {
-  "score": number (0-100),
+  "score": number (0-100, weighted average of dimensions),
   "verdict": "strong_fit | good_fit | possible_fit | weak_fit",
+  "dimensions": {
+    "skills_match":       number (0-10),
+    "experience_level":   number (0-10),
+    "industry_relevance": number (0-10),
+    "work_type_fit":      number (0-10),
+    "salary_alignment":   number (0-10),
+    "location_fit":       number (0-10),
+    "employment_type":    number (0-10),
+    "growth_potential":   number (0-10),
+    "culture_signals":    number (0-10),
+    "deal_breaker_check": number (0-10, 0 if any deal-breaker triggered)
+  },
+  "work_type_detected": "remote | hybrid | onsite | unknown",
   "highlights": ["string — specific skills/experiences that match"],
   "gaps": ["string — specific requirements the candidate doesn't meet"],
-  "deal_breakers": ["string — any hard deal-breakers found (empty array if none)"],
+  "deal_breakers": ["string — any hard deal-breakers (empty array if none)"],
   "salary_match": true | false | null,
-  "reasoning": "string (2-3 sentences explaining the score)"
+  "reasoning": "string (2-3 sentences explaining the overall score)"
 }
 
-SCORING RULES:
-- 90-100: Near-perfect match — skills, experience level, and preferences all align
-- 75-89: Strong match — most requirements met, minor gaps that won't disqualify
-- 50-74: Partial match — has relevant skills but significant gaps (seniority, stack, location)
-- 25-49: Weak match — some transferable skills but major misalignments
-- 0-24: Poor match — fundamental mismatches (wrong field, hard deal-breakers)
+OVERALL SCORE: Weighted average — skills_match (25%), experience_level (20%), industry_relevance (10%), work_type_fit (10%), salary_alignment (10%), location_fit (5%), employment_type (5%), growth_potential (5%), culture_signals (5%), deal_breaker_check (5%).
 
-DEAL-BREAKER RULES (cap score at 30 max if any apply):
-- Job requires on-site and candidate is remote-only AND in a different city/country than the job
-- Job says a specific degree is "required" (not "preferred") and candidate lacks it
-- Job requires 5+ more years of experience than candidate has
-- Job requires specific visa/work authorization candidate doesn't have
+DIMENSION RUBRICS:
+- skills_match: 9-10=exact stack match, 7-8=mostly matches with minor gaps, 5-6=50% overlap, 3-4=adjacent skills only, 0-2=wrong field
+- experience_level: 9-10=perfect seniority match, 7-8=1 level difference, 5-6=2 levels difference, 0-4=major mismatch
+- industry_relevance: how relevant is the candidate's industry background to this company/role
+- work_type_fit: 10=preference matches detected work type, 5=unknown/flexible, 0=direct conflict (remote-only candidate for onsite role)
+- salary_alignment: 10=ranges overlap well, 5=unknown, 0=no overlap
+- location_fit: 10=remote or matching city, 7=same country, 5=unknown, 0=different country with no remote option
+- employment_type: 10=exact match, 5=compatible (e.g. full-time candidate for contract role), 0=incompatible
+- growth_potential: does this role offer career progression relative to candidate's current level?
+- culture_signals: infer from job description — team size, values, autonomy, startup vs enterprise
+- deal_breaker_check: 0 if any hard deal-breaker triggered, 10 if none
 
-EXPERIENCE LEVEL MATCHING:
-- Compare the seniority implied by the job (entry, mid, senior, staff, lead, principal) with the candidate's experience
-- A mid-level candidate applying to a senior role = partial gap (reduce score by 10-20)
-- A senior candidate applying to an entry role = overqualified (reduce score by 10-15)
-- Match years of experience to the level: entry (0-2yr), mid (2-5yr), senior (5-10yr), lead/staff (8+yr)
+DEAL-BREAKERS (set deal_breaker_check=0 and cap overall score at 30 if any):
+- Job requires on-site and candidate is remote-only AND in different city/country
+- Degree "required" (not "preferred") and candidate lacks it
+- Job requires 5+ more years than candidate has
+- Work authorization mismatch
 
-STACK ALIGNMENT:
-- Exact stack matches (e.g., job wants React + Node.js, candidate knows React + Node.js) = full credit
-- Adjacent/transferable skills (e.g., job wants Vue.js, candidate knows React) = partial credit (70-80%)
-- Completely different stack (e.g., job wants Java Spring, candidate only knows Python Flask) = significant gap
+WORK_TYPE DETECTION: Read the job description and location carefully:
+- "Remote", "fully remote", "work from home", "WFH", "distributed" → remote
+- "Hybrid", "2-3 days in office", "flexible" → hybrid
+- "On-site", "in-office", "in-person required", specific city with no remote mention → onsite
+- Can't determine → unknown`
 
-SALARY ALIGNMENT:
-- If both job salary and candidate salary expectations are known, check overlap
-- salary_match = true if ranges overlap, false if no overlap, null if data missing on either side
-
-PREFERENCE ALIGNMENT:
-- Consider candidate's preferred work style (remote/hybrid/onsite) vs what the job offers
-- Consider candidate's preferred employment type vs what the job offers
-- If candidate has specific deal-breakers set, respect them
-
-In "highlights", list 2-4 specific skills/experiences that match.
-In "gaps", list specific requirements the candidate doesn't meet.
-In "deal_breakers", list any hard deal-breakers found (empty array if none).
-In "reasoning", explain the score in 2-3 sentences.`
-
-  const prompt = `Score this candidate's fit for the job.
+  const prompt = `Score this candidate for the job across 10 dimensions.
 
 Job Description:
 ${jobDescription}
 
-Candidate Resume Summary:
+Candidate Resume:
 ${JSON.stringify(parsedResume, null, 2)}
 
 Candidate Preferences:
-- Salary range: ${userPrefs.salary || 'not specified'}
+- Salary: ${userPrefs.salary || 'not specified'}
 - Location: ${userPrefs.location || 'flexible'}
 - Employment type: ${userPrefs.employment_type || 'full-time'}
 - Work authorization: ${userPrefs.work_authorization || 'not specified'}
 
 Job Search Preferences:
 - Preferred work style: ${prefs.work_style || 'any'}
-- Experience level: ${prefs.experience_level || 'not specified'}
-- Deal-breakers to enforce: ${prefs.deal_breakers?.length ? prefs.deal_breakers.join(', ') : 'none specified'}
+- Experience level target: ${prefs.experience_level || 'not specified'}
+- Deal-breakers: ${prefs.deal_breakers?.length ? prefs.deal_breakers.join(', ') : 'none'}
 - Target industries: ${prefs.target_industries?.length ? prefs.target_industries.join(', ') : 'any'}
-- Languages spoken: ${prefs.languages?.length ? prefs.languages.join(', ') : 'not specified'}
+- Languages: ${prefs.languages?.length ? prefs.languages.join(', ') : 'not specified'}
 
-Be honest and nuanced. A 90+ score means the candidate is nearly perfect for this role.
-If deal-breakers are triggered, explain which ones in the deal_breakers array and cap the score at 30.`
+Be honest. 90+ means near-perfect. Detect work_type from the job description text.`
 
   const result = await callClaude(apiKey, system, prompt)
   return parseJSON(result)
@@ -371,5 +370,50 @@ ${allRequirements}
 Identify the top skills appearing in these job descriptions that the candidate lacks.`
 
   const result = await callClaude(apiKey, system, prompt, 1500)
+  return parseJSON(result)
+}
+
+// ─── Interview Prep (STAR format, per-job) ────────────────────────────────────
+export async function generateInterviewPrep(apiKey, job, parsedResume, questionBankAnswers = []) {
+  const system = `You are an expert interview coach helping a candidate prepare for a specific job.
+Return ONLY valid JSON — no markdown, no explanation:
+{
+  "questions": [
+    {
+      "question": "string",
+      "type": "behavioral | technical | situational | company_specific",
+      "answer": "string (STAR format for behavioral, direct answer for technical/situational)",
+      "star_situation": "string | null",
+      "star_task": "string | null",
+      "star_action": "string | null",
+      "star_result": "string | null"
+    }
+  ]
+}`
+
+  const existingAnswers = questionBankAnswers.length
+    ? `\nCandidate's existing question bank answers (use as context for their communication style):\n${questionBankAnswers.map(q => `Q: ${q.question}\nA: ${q.answer}`).join('\n\n')}`
+    : ''
+
+  const prompt = `Generate 7 interview questions and personalized answers for this candidate applying to this role.
+
+Role: ${job.title} at ${job.company}
+Job Description:
+${(job.description || '').slice(0, 3000)}
+
+Candidate Background:
+${JSON.stringify(parsedResume, null, 2)}
+${existingAnswers}
+
+Requirements:
+- 3 behavioral questions (STAR format answers using candidate's real experience)
+- 2 technical/role-specific questions with direct answers
+- 1 situational question ("Tell me about a time...")
+- 1 company-specific question (reference something from the job description)
+- For behavioral questions, fill in star_situation/task/action/result with candidate-specific details from their resume
+- Do NOT fabricate experience — only use what's in the resume
+- Answers should be 100-200 words each, specific and compelling`
+
+  const result = await callClaude(apiKey, system, prompt, 4096)
   return parseJSON(result)
 }

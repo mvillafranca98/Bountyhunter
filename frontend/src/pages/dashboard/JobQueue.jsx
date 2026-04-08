@@ -13,6 +13,25 @@ const STATUS_TABS = [
   { key: 'expired',      label: 'Expired' },
 ]
 
+function WorkTypeBadge({ workType }) {
+  const map = {
+    remote:  { label: '🌐 Remote',  cls: 'badge-cobalt' },
+    hybrid:  { label: '🔄 Hybrid',  cls: 'badge-violet' },
+    onsite:  { label: '🏢 On-site', cls: 'badge-amber'  },
+    unknown: { label: '❓ Unknown', cls: 'badge-gray'   },
+  }
+  const { label, cls } = map[workType] || map.unknown
+  return <span className={`badge ${cls} text-xs`}>{label}</span>
+}
+
+function SubscriptionBadge() {
+  return (
+    <span className="badge badge-amber text-xs" title="Subscription may be required to apply">
+      💳 Subscription
+    </span>
+  )
+}
+
 function FitBadge({ score }) {
   if (!score) return <span className="badge badge-gray">—</span>
   if (score >= 80) return <span className="badge badge-green">{score}%</span>
@@ -39,16 +58,20 @@ export default function JobQueue() {
   const [preparing, setPreparing] = useState(false)
   const [applying, setApplying] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [workTypeFilter, setWorkTypeFilter] = useState(null)  // null | 'remote' | 'hybrid' | 'onsite'
+  const [showSubscription, setShowSubscription] = useState(false)  // false = hide subscription jobs
   const [notes, setNotes] = useState([])
   const [timeline, setTimeline] = useState([])
   const [noteText, setNoteText] = useState('')
   const [notesLoading, setNotesLoading] = useState(false)
 
-  const load = async (status, sort) => {
+  const load = async (status, sort, workType, subscription) => {
     setLoading(true)
     try {
       const params = { sort }
       if (status) params.status = status
+      if (workType) params.work_type = workType
+      if (subscription) params.subscription = 'include'
       const [jobsRes, countsRes] = await Promise.all([
         jobsApi.list(params),
         jobsApi.counts(),
@@ -60,7 +83,7 @@ export default function JobQueue() {
     }
   }
 
-  useEffect(() => { load(activeStatus, sortBy) }, [activeStatus, sortBy])
+  useEffect(() => { load(activeStatus, sortBy, workTypeFilter, showSubscription) }, [activeStatus, sortBy, workTypeFilter, showSubscription])
 
   // Load notes + timeline when a job is selected
   useEffect(() => {
@@ -98,7 +121,7 @@ export default function JobQueue() {
       const { data } = await jobsApi.prepare(job.id)
       toast.success('Resume tailored + cover letter ready!')
       setSelected({ ...job, prepared: data })
-      load(activeStatus, sortBy)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Preparation failed')
     } finally {
@@ -112,7 +135,7 @@ export default function JobQueue() {
       await applicationsApi.apply(job.id, { method: 'manual' })
       toast.success('Marked as applied!')
       setSelected(null)
-      load(activeStatus, sortBy)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -132,7 +155,7 @@ export default function JobQueue() {
       })
       toast.success('Auto-apply queued!')
       setSelected(null)
-      load(activeStatus, sortBy)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -202,6 +225,42 @@ export default function JobQueue() {
         ))}
       </div>
 
+      {/* Work type filter + subscription toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-1.5">
+          <span className="section-label mr-1">Work type</span>
+          {[
+            { key: null,      label: 'All' },
+            { key: 'remote',  label: '🌐 Remote' },
+            { key: 'hybrid',  label: '🔄 Hybrid' },
+            { key: 'onsite',  label: '🏢 On-site' },
+          ].map(({ key, label }) => (
+            <button
+              key={String(key)}
+              onClick={() => setWorkTypeFilter(key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                workTypeFilter === key
+                  ? 'bg-cobalt text-white'
+                  : 'bg-surface-700 text-ink-muted hover:text-ink-primary'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowSubscription(v => !v)}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+            showSubscription
+              ? 'border-brass/40 bg-brass/10 text-brass'
+              : 'border-surface-600 text-ink-muted hover:text-ink-primary'
+          }`}
+        >
+          <span>💳</span>
+          <span>{showSubscription ? 'Showing subscription jobs' : 'Subscription jobs hidden'}</span>
+        </button>
+      </div>
+
       {/* Jobs list */}
       <div className="space-y-2">
         {loading && (
@@ -229,6 +288,8 @@ export default function JobQueue() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-ink-primary">{job.title}</p>
                   <StatusBadge status={job.status} />
+                  <WorkTypeBadge workType={job.work_type || 'unknown'} />
+                  {job.requires_subscription === 1 && <SubscriptionBadge />}
                 </div>
                 <p className="text-sm text-ink-secondary mt-0.5">{job.company} · {job.location}</p>
                 {(job.salary_min || job.salary_max) && (
@@ -251,6 +312,22 @@ export default function JobQueue() {
             {/* Expanded detail */}
             {selected?.id === job.id && (
               <div className="mt-4 pt-4 border-t border-surface-600 space-y-4">
+                {/* Meta badges */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <WorkTypeBadge workType={job.work_type || 'unknown'} />
+                  {job.requires_subscription === 1 && <SubscriptionBadge />}
+                </div>
+
+                {/* Subscription warning */}
+                {job.requires_subscription === 1 && (
+                  <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2.5">
+                    <span className="text-base leading-none mt-0.5">💳</span>
+                    <p className="text-xs text-amber-300">
+                      This job may require a subscription to apply. Check the listing before applying.
+                    </p>
+                  </div>
+                )}
+
                 {/* Fit reasoning */}
                 {job.fit_reasoning && (
                   <div className="bg-surface-900 rounded-lg p-3 space-y-2">
@@ -366,9 +443,22 @@ export default function JobQueue() {
                         </button>
                       )}
                       {selected.prepared && (
-                        <button onClick={() => autoApply(selected)} disabled={applying} className="btn-primary text-xs">
-                          {applying ? 'Queuing…' : 'Auto-apply'}
-                        </button>
+                        job.requires_subscription === 1
+                          ? (
+                            <a
+                              href={job.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn-primary text-xs"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              Visit Externally ↗
+                            </a>
+                          ) : (
+                            <button onClick={() => autoApply(selected)} disabled={applying} className="btn-primary text-xs">
+                              {applying ? 'Queuing…' : 'Auto-apply'}
+                            </button>
+                          )
                       )}
                       <button onClick={() => applyManual(job)} disabled={applying} className="btn-secondary text-xs">
                         Mark as applied (manual)

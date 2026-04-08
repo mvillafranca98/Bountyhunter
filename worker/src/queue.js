@@ -3,6 +3,17 @@ import { scoreJobFit } from './lib/claude.js'
 import { generateId } from './lib/crypto.js'
 import { fetchUserPreferences } from './lib/preferences.js'
 
+// ─── Cosine Similarity (pure JS, no deps) ─────────────────────────────────────
+function cosineSimilarity(a, b) {
+  let dot = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
 export async function handleQueue(batch, env) {
   for (const msg of batch.messages) {
     try {
@@ -22,6 +33,12 @@ async function processMessage(body, env) {
       break
     case 'SCORE_JOB':
       await handleScoreJob(body, env)
+      break
+    case 'SCORE_JOBS_BATCH':
+      await handleScoreJobsBatch(body, env)
+      break
+    case 'SCAN_COMPANY':
+      await handleScanCompany(body, env)
       break
     case 'AUTO_APPLY':
       await handleAutoApply(body, env)
@@ -105,6 +122,47 @@ async function handleScoreJob({ userId, jobId }, env) {
     work_authorization: user?.work_authorization,
   }
 
+  // ─── Embedding pre-filter (Cloudflare Workers AI) ─────────────────────────────
+  // If env.AI is available, compute cosine similarity first.
+  // Below threshold → skip Claude entirely, save API cost.
+  if (env.AI && Object.keys(parsedResume).length > 0) {
+    try {
+      const resumeText = [
+        parsedResume.summary || '',
+        (parsedResume.skills || []).join(' '),
+        (parsedResume.experience || []).map(e => `${e.title} ${e.description || ''}`).join(' '),
+      ].join(' ').slice(0, 1500)
+
+      const jobText = (job.description || job.title).slice(0, 1500)
+
+      const embeddings = await env.AI.run('@cf/baai/bge-small-en-v1.5', {
+        text: [resumeText, jobText],
+      })
+
+      const similarity = cosineSimilarity(embeddings.data[0], embeddings.data[1])
+
+      if (similarity < 0.25) {
+        const lowFitResult = {
+          score: 15,
+          verdict: 'weak_fit',
+          reasoning: 'Low semantic similarity with your resume — pre-filtered before full AI analysis.',
+          highlights: [],
+          gaps: ['Low overall relevance to your background'],
+          deal_breakers: [],
+          salary_match: null,
+          dimensions: null,
+          work_type_detected: 'unknown',
+        }
+        await env.DB.prepare(
+          `UPDATE jobs SET fit_score = 15, fit_reasoning = ?, status = 'low_fit', updated_at = datetime('now') WHERE id = ?`
+        ).bind(JSON.stringify(lowFitResult), jobId).run()
+        return
+      }
+    } catch (e) {
+      console.warn('Embedding pre-filter failed, falling back to Claude:', e.message)
+    }
+  }
+
   const jobSearchPrefs = await fetchUserPreferences(env.DB, userId)
 
   const result = await scoreJobFit(env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
@@ -115,6 +173,25 @@ async function handleScoreJob({ userId, jobId }, env) {
     `UPDATE jobs SET fit_score = ?, fit_reasoning = ?, status = ?, updated_at = datetime('now')
      WHERE id = ?`
   ).bind(result.score, JSON.stringify(result), status, jobId).run()
+
+  // Update work_type if Claude detected it
+  if (result.work_type_detected && result.work_type_detected !== 'unknown') {
+    await env.DB.prepare(
+      `UPDATE jobs SET work_type = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(result.work_type_detected, jobId).run()
+  }
+}
+
+// ─── Score Jobs Batch (parallel) ──────────────────────────────────────────────
+async function handleScoreJobsBatch({ userId, jobIds }, env) {
+  if (!jobIds?.length) return
+  // Score up to 5 jobs in parallel
+  const batch = jobIds.slice(0, 5)
+  await Promise.allSettled(
+    batch.map(jobId => handleScoreJob({ userId, jobId }, env).catch(e =>
+      console.error(`Batch score failed for ${jobId}:`, e.message)
+    ))
+  )
 }
 
 // ─── Auto Apply ────────────────────────────────────────────────────────────────
@@ -173,4 +250,65 @@ async function handleAutoApply({ userId, jobId, jobUrl, resume_version_id, cover
       "UPDATE jobs SET status = 'needs_manual', updated_at = datetime('now') WHERE id = ?"
     ).bind(jobId).run()
   }
+}
+
+// ─── Scan Company Watchlist (cron-triggered) ──────────────────────────────────
+async function handleScanCompany({ userId, companyId }, env) {
+  const company = await env.DB.prepare(
+    'SELECT * FROM company_watchlist WHERE id = ? AND user_id = ? AND is_active = 1'
+  ).bind(companyId, userId).first()
+  if (!company) return
+
+  const atsUrls = {
+    greenhouse: `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(company.ats_slug)}/jobs?content=true`,
+    lever:      `https://api.lever.co/v0/postings/${encodeURIComponent(company.ats_slug)}?mode=json`,
+    ashby:      `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(company.ats_slug)}`,
+  }
+  const url = atsUrls[company.ats_type]
+  if (!url) return
+
+  let jobs = []
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'BountyHunter/1.0' } })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json()
+
+    const raw = company.ats_type === 'greenhouse' ? (json.jobs || [])
+              : company.ats_type === 'lever'      ? (Array.isArray(json) ? json : [])
+              : (json.jobPostings || [])
+
+    jobs = raw.map(job => {
+      const location = (company.ats_type === 'greenhouse' ? job.location?.name
+                      : company.ats_type === 'lever'      ? job.categories?.location
+                      : job.locationName) || ''
+      const rawDesc  = (company.ats_type === 'greenhouse' ? job.content
+                      : company.ats_type === 'lever'      ? (job.descriptionPlain || job.description)
+                      : (job.descriptionHtml || job.description)) || ''
+      const description = rawDesc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000)
+      const jobUrl  = (company.ats_type === 'greenhouse' ? job.absolute_url
+                     : company.ats_type === 'lever'      ? job.hostedUrl
+                     : job.jobUrl) || ''
+      const text = `${location} ${description}`.toLowerCase()
+      const work_type = /\bhybrid\b/.test(text) ? 'hybrid'
+                      : /\bon.?site\b|\bin.?office\b/.test(text) ? 'onsite'
+                      : /\bremote\b|\bwfh\b/.test(text) ? 'remote'
+                      : 'unknown'
+      return { title: job.title || job.text, company: company.company_name, location, url: jobUrl, description, external_id: String(job.id), source: company.ats_type, work_type }
+    })
+  } catch (e) {
+    console.error(`SCAN_COMPANY ${company.company_name}:`, e.message)
+    return
+  }
+
+  for (const job of jobs) {
+    const id = generateId()
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO jobs (id, user_id, source, external_id, title, company, location, url, description, work_type, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')`
+    ).bind(id, userId, job.source, job.external_id, job.title, job.company, job.location, job.url, job.description, job.work_type).run()
+  }
+
+  await env.DB.prepare(
+    "UPDATE company_watchlist SET last_scanned_at = datetime('now') WHERE id = ?"
+  ).bind(companyId).run()
 }
