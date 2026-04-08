@@ -153,9 +153,9 @@ function Nav() {
 /* ─── Hero ────────────────────────────────────────────────────────────────── */
 function Hero() {
   const metrics = [
-    { label: '847 jobs scored today', top: '18%', right: '6%' },
-    { label: '9 job sources', top: '55%', left: '3%' },
-    { label: '4.2x faster applications', bottom: '20%', right: '5%' },
+    { label: '9 sources + ATS watchlist', top: '18%', right: '6%' },
+    { label: '10-dimension scoring', top: '55%', left: '3%' },
+    { label: 'STAR interview prep included', bottom: '20%', right: '5%' },
   ]
 
   return (
@@ -197,7 +197,7 @@ function Hero() {
           variants={fadeUp} initial="hidden" animate="visible" custom={0.2}
           className="text-ink-secondary text-lg md:text-xl max-w-xl mx-auto mb-10 leading-relaxed"
         >
-          BountyHunter scans 9 job platforms, scores every role against your resume with AI, and generates tailored applications — automatically.
+          BountyHunter scans 9 job platforms + company career pages, scores every role across 10 dimensions, and generates tailored applications with STAR interview prep — automatically.
         </motion.p>
 
         <motion.div
@@ -212,7 +212,7 @@ function Hero() {
           variants={fadeUp} initial="hidden" animate="visible" custom={0.4}
           className="text-ink-muted text-sm"
         >
-          No credit card&nbsp;&nbsp;·&nbsp;&nbsp;9 job sources&nbsp;&nbsp;·&nbsp;&nbsp;Scores in seconds
+          No credit card&nbsp;&nbsp;·&nbsp;&nbsp;9 sources + ATS watchlist&nbsp;&nbsp;·&nbsp;&nbsp;Remote filter built-in
         </motion.p>
       </div>
     </section>
@@ -220,7 +220,7 @@ function Hero() {
 }
 
 /* ─── Source strip ────────────────────────────────────────────────────────── */
-const SOURCES = ['Remotive', 'Arbeitnow', 'RemoteOK', 'HackerNews', 'Himalayas', 'The Muse', 'Jobicy', 'Google Jobs', 'JSearch']
+const SOURCES = ['Remotive', 'Arbeitnow', 'RemoteOK', 'HackerNews', 'Himalayas', 'The Muse', 'Jobicy', 'Google Jobs', 'JSearch', 'Greenhouse', 'Lever', 'Ashby', 'Wellfound']
 
 function SourceStrip() {
   return (
@@ -247,18 +247,18 @@ function SourceStrip() {
 const CAPABILITIES = [
   {
     icon: <IconSearch />,
-    title: '9-source job scan',
-    desc: 'We query Remotive, Google Jobs, HackerNews, and 6 more simultaneously. No job board left unchecked.',
+    title: '9-source + company scan',
+    desc: 'Queries Remotive, Google Jobs, HackerNews, and 6 more — plus scrapes Greenhouse, Lever, and Ashby career pages for companies you follow.',
   },
   {
     icon: <IconSparkle />,
-    title: 'AI fit scoring',
-    desc: 'Claude scores every job 0–100 against your resume. Deal-breakers, stack alignment, seniority match — all checked.',
+    title: '10-dimension AI scoring',
+    desc: 'Claude scores every job across 10 axes: skills, seniority, work type, salary, industry, culture signals, and more. Remote vs hybrid vs on-site is always detected.',
   },
   {
     icon: <IconDoc />,
     title: 'One-click applications',
-    desc: 'Tailored resume + cover letter generated per job. Download as ATS-friendly .docx or apply directly.',
+    desc: 'Tailored resume + cover letter generated per job. Download as ATS-friendly .docx or auto-apply. Subscription-gated jobs are flagged before you waste time.',
   },
 ]
 
@@ -269,7 +269,7 @@ function Capabilities() {
     <section className="py-24 bg-surface-900">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <ScrollReveal className="text-center mb-16">
-          <h2 className="font-display text-h2 font-bold text-ink-primary">Everything you need to land the role</h2>
+          <h2 className="font-display text-h2 font-bold text-ink-primary">Every angle covered — from search to offer</h2>
         </ScrollReveal>
         <motion.div ref={ref} variants={stagger} initial="hidden" animate={inView ? 'visible' : 'hidden'}
           className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -292,10 +292,10 @@ function Capabilities() {
 
 /* ─── How it works ────────────────────────────────────────────────────────── */
 const STEPS = [
-  { n: '1', title: 'Upload your resume', desc: 'Claude parses and structures your experience, skills, and history.' },
-  { n: '2', title: 'Set your targets', desc: 'Tell BountyHunter what roles, salary, and deal-breakers matter to you.' },
-  { n: '3', title: 'Hunt', desc: 'We scan 9 platforms, score every match, and surface the best opportunities.' },
-  { n: '4', title: 'Apply', desc: 'Download your tailored resume and cover letter, or let us auto-apply for you.' },
+  { n: '1', title: 'Upload your resume', desc: 'Claude parses your PDF and builds a Harvard-style master resume, LinkedIn copy, and skill profile.' },
+  { n: '2', title: 'Set your targets', desc: 'Choose roles, salary range, work type (remote / hybrid / on-site), and add companies to your watchlist.' },
+  { n: '3', title: 'Hunt', desc: 'We scan 9 job boards + your watched companies on Greenhouse, Lever, and Ashby. Every match is scored across 10 dimensions.' },
+  { n: '4', title: 'Apply', desc: 'Review your tailored resume + cover letter, prep with STAR interview questions, then apply or auto-submit.' },
 ]
 
 function HowItWorks() {
@@ -332,14 +332,16 @@ function HowItWorks() {
 
 /* ─── Feature grid ────────────────────────────────────────────────────────── */
 const FEATURES = [
-  { icon: <IconBell />, title: 'Daily job alerts', desc: 'Automated search runs while you sleep.' },
-  { icon: <IconExtension />, title: 'Chrome extension', desc: 'Import any job from any website instantly.' },
-  { icon: <IconTarget />, title: 'Smart scoring', desc: 'Deal-breaker detection + seniority matching.' },
-  { icon: <IconDownload />, title: '.docx resume download', desc: 'ATS-optimized, beautifully formatted.' },
-  { icon: <IconTimeline />, title: 'Application timeline', desc: 'Notes, status, and history per job.' },
-  { icon: <IconChart />, title: 'Analytics dashboard', desc: 'Score trends and source-level stats.' },
-  { icon: <IconLinkedIn />, title: 'LinkedIn import', desc: 'Paste your profile and we parse everything.' },
-  { icon: <IconQuestion />, title: 'Question bank', desc: 'Store answers, AI-generate new ones on demand.' },
+  { icon: <IconBell />,      title: 'Daily company watchlist scan', desc: 'Add companies by ATS slug. BountyHunter hits Greenhouse, Lever, and Ashby every morning and drops new openings into your queue automatically.' },
+  { icon: <IconTarget />,    title: '10-dimension fit scoring',      desc: 'Skills, seniority, work type, salary, industry, growth potential, culture signals — each scored 0–10. No more guessing why a job "feels off".' },
+  { icon: <IconSparkle />,   title: 'Remote / hybrid / on-site filter', desc: 'Work type is detected from every job description. Set remote-only in preferences and on-site jobs never reach your queue.' },
+  { icon: <IconQuestion />,  title: 'STAR interview prep',           desc: 'After scoring, Claude generates 7 role-specific questions — 3 behavioral with full STAR answers, 2 technical, 1 situational, 1 company-specific.' },
+  { icon: <IconDoc />,       title: 'Subscription job detection',    desc: 'Jobs requiring paid subscriptions are flagged with a 💳 badge. Hidden by default — toggle to include when you have access.' },
+  { icon: <IconDownload />,  title: '.docx resume download',         desc: 'Tailored per job, ATS-safe, Harvard format. Mirrors exact keywords from the job description for maximum pass-through rate.' },
+  { icon: <IconTimeline />,  title: 'Application timeline',          desc: 'Every status change, note, and resume version logged per job. Know exactly where every application stands.' },
+  { icon: <IconChart />,     title: 'Analytics dashboard',           desc: 'Score distribution, source breakdown, response rates. See which platforms are actually sending you callbacks.' },
+  { icon: <IconExtension />, title: 'Chrome extension',              desc: 'Import any job from any page with one click. Claude scores it against your resume instantly.' },
+  { icon: <IconLinkedIn />,  title: 'Embedding pre-filter',          desc: 'Semantic similarity check runs before Claude. Irrelevant jobs are filtered in milliseconds — no API call, no wasted cost.' },
 ]
 
 function FeatureGrid() {
@@ -349,7 +351,7 @@ function FeatureGrid() {
     <section className="py-24 bg-surface-900">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <ScrollReveal className="text-center mb-16">
-          <h2 className="font-display text-h2 font-bold text-ink-primary">Built for serious job hunters</h2>
+          <h2 className="font-display text-h2 font-bold text-ink-primary">Everything serious job hunters actually need</h2>
         </ScrollReveal>
         <motion.div ref={ref} variants={stagger} initial="hidden" animate={inView ? 'visible' : 'hidden'}
           className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -379,7 +381,7 @@ function CTABand() {
         <ScrollReveal>
           <h2 className="font-display text-h2 font-bold text-white mb-4">Ready to hunt smarter?</h2>
           <p className="text-white/70 text-lg mb-10 leading-relaxed">
-            Join hundreds of job seekers using AI to cut application time by 4x.
+            9 job boards + ATS career pages. 10-dimension scoring. STAR interview prep. Remote filter. All in one tool — free to start.
           </p>
           <Link to="/register"
             className="inline-flex items-center justify-center gap-2 bg-white text-cobalt font-semibold font-display px-8 py-3.5 rounded-lg text-base shadow-glow-cobalt transition-all duration-200 hover:bg-ink-primary hover:-translate-y-px active:translate-y-0">
