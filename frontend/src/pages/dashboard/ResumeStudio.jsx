@@ -3,6 +3,10 @@ import { toast } from 'react-toastify'
 import { resumeApi } from '../../lib/api'
 import StepResume from '../onboarding/steps/StepResume'
 
+function IconLinkedIn() {
+  return <svg className="w-4 h-4 text-cobalt-light" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+}
+
 // ─── Minimal markdown renderer (no dependencies) ───────────────────────────────
 function renderInline(str) {
   // Split on **bold**, *italic*, `code`
@@ -91,6 +95,8 @@ export default function ResumeStudio() {
   const [linkedInText, setLinkedInText] = useState('')
   const [showPasteArea, setShowPasteArea] = useState(false)
   const [importingLI, setImportingLI] = useState(false)
+  const [linkedInMode, setLinkedInMode] = useState('url')
+  const [exportFiles, setExportFiles] = useState([])
 
   const load = () => {
     setLoading(true)
@@ -121,6 +127,24 @@ export default function ResumeStudio() {
     }
   }
 
+  const importLinkedInExport = async () => {
+    if (!exportFiles.length) return
+    setImportingLI(true)
+    try {
+      const fileContents = await Promise.all(
+        exportFiles.map(f => f.text().then(content => ({ name: f.name, content })))
+      )
+      const { data } = await resumeApi.importLinkedInExport(fileContents)
+      toast.success(data.message || 'LinkedIn export imported!')
+      setExportFiles([])
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Export import failed')
+    } finally {
+      setImportingLI(false)
+    }
+  }
+
   useEffect(() => { load() }, [])
 
   if (loading) return <div className="text-ink-muted text-sm text-center py-16">Loading…</div>
@@ -137,8 +161,131 @@ export default function ResumeStudio() {
           <span className="text-xs text-ink-muted uppercase">or</span>
           <div className="flex-1 border-t border-surface-600" />
         </div>
-        <div className="card p-4 space-y-3">
-          <h3 className="font-display text-sm font-semibold text-ink-primary">Import from LinkedIn</h3>
+
+        {/* LinkedIn Import card */}
+        <div className="card p-4 space-y-4">
+          <h3 className="font-display text-sm font-semibold text-ink-primary flex items-center gap-2">
+            <IconLinkedIn />
+            Import from LinkedIn
+          </h3>
+
+          {/* Tab toggle */}
+          <div className="flex gap-1 bg-surface-800 rounded-lg p-1">
+            {['url', 'export'].map(mode => (
+              <button
+                key={mode}
+                onClick={() => setLinkedInMode(mode)}
+                className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${
+                  linkedInMode === mode ? 'bg-cobalt text-white' : 'text-ink-muted hover:text-ink-primary'
+                }`}
+              >
+                {mode === 'url' ? '🔗 Profile URL' : '📁 Data Export'}
+              </button>
+            ))}
+          </div>
+
+          {linkedInMode === 'url' && (
+            <div className="space-y-2">
+              <input
+                type="url"
+                className="input text-sm"
+                placeholder="https://linkedin.com/in/your-profile"
+                value={linkedInUrl}
+                onChange={e => setLinkedInUrl(e.target.value)}
+              />
+              {showPasteArea && (
+                <>
+                  <p className="text-xs text-warning">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
+                  <textarea
+                    className="input text-sm h-32"
+                    placeholder="Go to your LinkedIn profile → Select All (Cmd+A) → Copy (Cmd+C) → Paste here"
+                    value={linkedInText}
+                    onChange={e => setLinkedInText(e.target.value)}
+                  />
+                </>
+              )}
+              <button
+                onClick={importLinkedIn}
+                disabled={importingLI || (!linkedInUrl.trim() && !linkedInText.trim())}
+                className="btn-primary text-sm w-full"
+              >
+                {importingLI ? 'Importing...' : 'Import from LinkedIn'}
+              </button>
+              <p className="text-xs text-ink-muted">Uses your saved LinkedIn session via the Playwright service for best results.</p>
+            </div>
+          )}
+
+          {linkedInMode === 'export' && (
+            <div className="space-y-3">
+              <div className="bg-surface-800 rounded-lg p-3 text-xs text-ink-muted space-y-1">
+                <p className="font-medium text-ink-secondary">How to get your LinkedIn export:</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>LinkedIn → Settings → Data Privacy</li>
+                  <li>Get a copy of your data → Request archive</li>
+                  <li>Download ZIP → Extract → Upload CSV files below</li>
+                </ol>
+                <p className="text-cobalt-light mt-1">Upload: Profile.csv, Positions.csv, Skills.csv, Education.csv</p>
+              </div>
+              <input
+                type="file"
+                accept=".csv"
+                multiple
+                onChange={e => setExportFiles(Array.from(e.target.files))}
+                className="text-sm text-ink-muted file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-cobalt/15 file:text-cobalt-light file:text-xs file:font-medium hover:file:bg-cobalt/25 cursor-pointer"
+              />
+              {exportFiles.length > 0 && (
+                <p className="text-xs text-ink-muted">{exportFiles.length} file(s) selected: {exportFiles.map(f => f.name).join(', ')}</p>
+              )}
+              <button
+                onClick={importLinkedInExport}
+                disabled={importingLI || exportFiles.length === 0}
+                className="btn-primary text-sm w-full"
+              >
+                {importingLI ? 'Parsing export...' : 'Parse LinkedIn Export'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const linkedin = resume.linkedin_experience || null
+  const parsed = resume.parsed_data
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-display text-3xl font-bold text-ink-primary">Resume Studio</h1>
+          <p className="text-ink-muted text-sm mt-1">{resume.original_filename} · uploaded {new Date(resume.created_at).toLocaleDateString()}</p>
+        </div>
+        <button onClick={() => setShowReupload(true)} className="btn-ghost text-sm">Replace resume</button>
+      </div>
+
+      {/* LinkedIn Import card */}
+      <div className="card p-4 space-y-4">
+        <h3 className="font-display text-sm font-semibold text-ink-primary flex items-center gap-2">
+          <IconLinkedIn />
+          Import from LinkedIn
+        </h3>
+
+        {/* Tab toggle */}
+        <div className="flex gap-1 bg-surface-800 rounded-lg p-1">
+          {['url', 'export'].map(mode => (
+            <button
+              key={mode}
+              onClick={() => setLinkedInMode(mode)}
+              className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${
+                linkedInMode === mode ? 'bg-cobalt text-white' : 'text-ink-muted hover:text-ink-primary'
+              }`}
+            >
+              {mode === 'url' ? '🔗 Profile URL' : '📁 Data Export'}
+            </button>
+          ))}
+        </div>
+
+        {linkedInMode === 'url' && (
           <div className="space-y-2">
             <input
               type="url"
@@ -165,55 +312,40 @@ export default function ResumeStudio() {
             >
               {importingLI ? 'Importing...' : 'Import from LinkedIn'}
             </button>
+            <p className="text-xs text-ink-muted">Uses your saved LinkedIn session via the Playwright service for best results.</p>
           </div>
-        </div>
-      </div>
-    )
-  }
+        )}
 
-  const linkedin = resume.linkedin_experience || null
-  const parsed = resume.parsed_data
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-ink-primary">Resume Studio</h1>
-          <p className="text-ink-muted text-sm mt-1">{resume.original_filename} · uploaded {new Date(resume.created_at).toLocaleDateString()}</p>
-        </div>
-        <button onClick={() => setShowReupload(true)} className="btn-ghost text-sm">Replace resume</button>
-      </div>
-
-      {/* LinkedIn Import */}
-      <div className="card p-4 space-y-3">
-        <h3 className="font-display text-sm font-semibold text-ink-primary">Import from LinkedIn</h3>
-        <div className="space-y-2">
-          <input
-            type="url"
-            className="input text-sm"
-            placeholder="https://linkedin.com/in/your-profile"
-            value={linkedInUrl}
-            onChange={e => setLinkedInUrl(e.target.value)}
-          />
-          {showPasteArea && (
-            <>
-              <p className="text-xs text-warning">LinkedIn blocked direct access. Please copy-paste your profile text:</p>
-              <textarea
-                className="input text-sm h-32"
-                placeholder="Go to your LinkedIn profile → Select All (Cmd+A) → Copy (Cmd+C) → Paste here"
-                value={linkedInText}
-                onChange={e => setLinkedInText(e.target.value)}
-              />
-            </>
-          )}
-          <button
-            onClick={importLinkedIn}
-            disabled={importingLI || (!linkedInUrl.trim() && !linkedInText.trim())}
-            className="btn-primary text-sm w-full"
-          >
-            {importingLI ? 'Importing...' : 'Import from LinkedIn'}
-          </button>
-        </div>
+        {linkedInMode === 'export' && (
+          <div className="space-y-3">
+            <div className="bg-surface-800 rounded-lg p-3 text-xs text-ink-muted space-y-1">
+              <p className="font-medium text-ink-secondary">How to get your LinkedIn export:</p>
+              <ol className="list-decimal list-inside space-y-0.5">
+                <li>LinkedIn → Settings → Data Privacy</li>
+                <li>Get a copy of your data → Request archive</li>
+                <li>Download ZIP → Extract → Upload CSV files below</li>
+              </ol>
+              <p className="text-cobalt-light mt-1">Upload: Profile.csv, Positions.csv, Skills.csv, Education.csv</p>
+            </div>
+            <input
+              type="file"
+              accept=".csv"
+              multiple
+              onChange={e => setExportFiles(Array.from(e.target.files))}
+              className="text-sm text-ink-muted file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-cobalt/15 file:text-cobalt-light file:text-xs file:font-medium hover:file:bg-cobalt/25 cursor-pointer"
+            />
+            {exportFiles.length > 0 && (
+              <p className="text-xs text-ink-muted">{exportFiles.length} file(s) selected: {exportFiles.map(f => f.name).join(', ')}</p>
+            )}
+            <button
+              onClick={importLinkedInExport}
+              disabled={importingLI || exportFiles.length === 0}
+              className="btn-primary text-sm w-full"
+            >
+              {importingLI ? 'Parsing export...' : 'Parse LinkedIn Export'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

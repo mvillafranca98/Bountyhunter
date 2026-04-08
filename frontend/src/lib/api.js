@@ -51,6 +51,7 @@ export const resumeApi = {
   get: () => api.get('/resume'),
   getAll: () => api.get('/resume/all'),
   importLinkedIn: (data) => api.post('/resume/import-linkedin', data, { timeout: 60000 }),
+  importLinkedInExport: (files) => api.post('/resume/import-linkedin-export', { files }, { timeout: 60000 }),
 }
 
 // ─── Jobs ──────────────────────────────────────────────────────────────────────

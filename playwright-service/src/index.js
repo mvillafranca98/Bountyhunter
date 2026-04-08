@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import { applyToJob } from './apply.js'
+import { scrapeLinkedInProfile } from './linkedin.js'
 
 const app = express()
 app.use(express.json({ limit: '10mb' }))
@@ -33,6 +34,21 @@ app.post('/apply', async (req, res) => {
   } catch (err) {
     console.error(`[apply] Unexpected error:`, err)
     res.status(500).json({ success: false, blockerReason: 'other', blockerDetail: err.message })
+  }
+})
+
+// POST /scrape-profile — scrape a LinkedIn profile URL using saved session + stealth
+app.post('/scrape-profile', async (req, res) => {
+  const { url } = req.body
+  if (!url) return res.status(400).json({ error: 'url is required' })
+  console.log(`[scrape-profile] Starting: ${url}`)
+  try {
+    const profileText = await scrapeLinkedInProfile(url)
+    console.log(`[scrape-profile] Success: ${profileText.slice(0, 100)}...`)
+    res.json({ profileText })
+  } catch (err) {
+    console.error(`[scrape-profile] Error:`, err.message)
+    res.status(500).json({ error: err.message, needsManualPaste: true })
   }
 })
 

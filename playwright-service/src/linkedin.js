@@ -202,6 +202,80 @@ async function getFieldLabel(page, element) {
   }
 }
 
+/**
+ * Scrape a LinkedIn profile page for resume import.
+ * Uses the saved LinkedIn session (from setup-linkedin).
+ * Returns structured profile text ready for Claude parsing.
+ */
+export async function scrapeLinkedInProfile(url) {
+  const { chromium } = await import('playwright-extra')
+  const StealthPlugin = (await import('puppeteer-extra-plugin-stealth')).default
+  chromium.use(StealthPlugin())
+
+  const context = await chromium.launchPersistentContext('.linkedin-session', {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  })
+
+  const page = await context.newPage()
+  try {
+    await ensureLoggedIn(page)
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
+    await page.waitForTimeout(2000)
+
+    // Extract profile sections
+    const name = await page.locator('h1').first().textContent({ timeout: 5000 }).catch(() => '')
+    const headline = await page.locator('.text-body-medium.break-words').first().textContent({ timeout: 3000 }).catch(() => '')
+    const location = await page.locator('.text-body-small.inline.t-black--light.break-words').first().textContent({ timeout: 3000 }).catch(() => '')
+
+    // About section
+    const about = await page.locator('#about ~ div .full-width span[aria-hidden="true"], section:has(#about) .pv-shared-text-with-see-more span[aria-hidden="true"]').first().textContent({ timeout: 3000 }).catch(() => '')
+
+    // Experience items
+    const expItems = await page.locator('#experience ~ div li, section:has(#experience) li.artdeco-list__item').all()
+    const experience = []
+    for (const item of expItems.slice(0, 10)) {
+      const title = await item.locator('.mr1.t-bold span[aria-hidden="true"], .t-bold span').first().textContent({ timeout: 1000 }).catch(() => '')
+      const company = await item.locator('.t-14.t-normal span[aria-hidden="true"]').first().textContent({ timeout: 1000 }).catch(() => '')
+      const dates = await item.locator('.t-14.t-normal.t-black--light span[aria-hidden="true"]').first().textContent({ timeout: 1000 }).catch(() => '')
+      if (title.trim()) experience.push(`${title.trim()} at ${company.trim()} (${dates.trim()})`)
+    }
+
+    // Education
+    const eduItems = await page.locator('#education ~ div li, section:has(#education) li.artdeco-list__item').all()
+    const education = []
+    for (const item of eduItems.slice(0, 5)) {
+      const school = await item.locator('.mr1.t-bold span[aria-hidden="true"]').first().textContent({ timeout: 1000 }).catch(() => '')
+      const degree = await item.locator('.t-14.t-normal span[aria-hidden="true"]').first().textContent({ timeout: 1000 }).catch(() => '')
+      if (school.trim()) education.push(`${school.trim()} — ${degree.trim()}`)
+    }
+
+    // Skills
+    const skillItems = await page.locator('#skills ~ div .mr1.t-bold span[aria-hidden="true"], section:has(#skills) .mr1.hoverable-link-text span[aria-hidden="true"]').all()
+    const skills = []
+    for (const skill of skillItems.slice(0, 20)) {
+      const text = await skill.textContent({ timeout: 500 }).catch(() => '')
+      if (text.trim()) skills.push(text.trim())
+    }
+
+    const profileText = [
+      `Name: ${name.trim()}`,
+      `Headline: ${headline.trim()}`,
+      `Location: ${location.trim()}`,
+      about.trim() ? `\nAbout:\n${about.trim()}` : '',
+      experience.length ? `\nExperience:\n${experience.join('\n')}` : '',
+      education.length ? `\nEducation:\n${education.join('\n')}` : '',
+      skills.length ? `\nSkills: ${skills.join(', ')}` : '',
+    ].filter(Boolean).join('\n')
+
+    await context.close()
+    return profileText
+  } catch (err) {
+    await context.close().catch(() => {})
+    throw err
+  }
+}
+
 function findBestAnswer(question, questionBank) {
   if (!question) return null
   const q = question.toLowerCase()

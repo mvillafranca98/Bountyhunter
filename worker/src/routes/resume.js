@@ -140,29 +140,52 @@ resumeRoutes.post('/import-linkedin', async (c) => {
 
   let profileText = text || ''
 
-  // If URL provided, try to fetch public page
   if (url && !profileText) {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; BountyHunter/1.0)',
-          'Accept': 'text/html',
-        },
-        redirect: 'follow',
-      })
-      if (res.ok) {
-        const html = await res.text()
-        profileText = html
-          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]*>/g, ' ')
-          .replace(/&[a-z]+;/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 10000)
+    // Try Playwright service first (stealth scraper with saved LinkedIn session)
+    const playwrightUrl = c.env.PLAYWRIGHT_SERVICE_URL
+    const playwrightToken = c.env.PLAYWRIGHT_SERVICE_TOKEN
+    if (playwrightUrl) {
+      try {
+        const pwRes = await fetch(`${playwrightUrl}/scrape-profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(playwrightToken ? { 'x-service-token': playwrightToken } : {}),
+          },
+          body: JSON.stringify({ url }),
+          signal: AbortSignal.timeout(30000),
+        })
+        if (pwRes.ok) {
+          const pwJson = await pwRes.json()
+          profileText = pwJson.profileText || ''
+        }
+      } catch (e) {
+        console.warn('Playwright service unavailable:', e.message)
       }
-    } catch (e) {
-      // Fetching failed — will ask user to paste text
+    }
+
+    // Fallback: direct fetch (usually blocked by LinkedIn)
+    if (!profileText) {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; BountyHunter/1.0)',
+            'Accept': 'text/html',
+          },
+          redirect: 'follow',
+        })
+        if (res.ok) {
+          const html = await res.text()
+          profileText = html
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/&[a-z]+;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 10000)
+        }
+      } catch (e) { /* ignore */ }
     }
 
     if (profileText.length < 100 || profileText.includes('Sign in') || profileText.includes('authwall')) {
@@ -274,6 +297,82 @@ ${profileText.slice(0, 8000)}`
     })
   } catch (e) {
     return c.json({ error: `Failed to parse profile: ${e.message}` }, 500)
+  }
+})
+
+// POST /resume/import-linkedin-export — parse LinkedIn data export CSV files
+resumeRoutes.post('/import-linkedin-export', async (c) => {
+  const userId = c.get('userId')
+  const { files } = await c.req.json()
+  // files: [{ name: 'Profile.csv', content: '...' }, { name: 'Positions.csv', content: '...' }, ...]
+
+  if (!files || !files.length) {
+    return c.json({ error: 'No files provided' }, 400)
+  }
+
+  const anthropicKey = c.env.ANTHROPIC_API_KEY
+  if (!anthropicKey || anthropicKey.startsWith('REPLACE_')) {
+    return c.json({ error: 'ANTHROPIC_API_KEY not configured' }, 503)
+  }
+
+  // Build a combined text from all uploaded CSV files
+  const combinedText = files.map(f => `=== ${f.name} ===\n${f.content}`).join('\n\n')
+
+  const parsePrompt = `Parse these LinkedIn data export CSV files into a structured resume JSON. Return ONLY valid JSON:
+{
+  "name": "Full Name",
+  "headline": "Professional headline/title",
+  "location": "City, Country",
+  "summary": "Professional summary (2-3 sentences based on experience)",
+  "experience": [
+    { "company": "Company Name", "title": "Job Title", "dates": "Start - End", "description": "Key responsibilities" }
+  ],
+  "education": [
+    { "school": "School Name", "degree": "Degree", "dates": "Start - End" }
+  ],
+  "skills": ["skill1", "skill2"],
+  "certifications": [],
+  "languages": []
+}
+
+LinkedIn Export Data:
+${combinedText.slice(0, 12000)}`
+
+  try {
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2048, messages: [{ role: 'user', content: parsePrompt }] }),
+    })
+
+    if (!aiRes.ok) throw new Error(`Claude API error ${aiRes.status}`)
+    const aiJson = await aiRes.json()
+    const responseText = aiJson.content?.[0]?.text || ''
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON in response')
+    const parsed = JSON.parse(jsonMatch[0])
+    const markdown = linkedInToMarkdown(parsed)
+
+    const id = generateId()
+    await c.env.DB.prepare('UPDATE resumes SET is_active = 0 WHERE user_id = ?').bind(userId).run()
+    await c.env.DB.prepare(
+      `INSERT INTO resumes (id, user_id, r2_key, original_filename, parsed_data, master_resume_text, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`
+    ).bind(id, userId, '', 'LinkedIn_Export.csv', JSON.stringify(parsed), markdown).run()
+
+    if (parsed.name) {
+      const [firstName, ...lastParts] = parsed.name.split(' ')
+      await c.env.DB.prepare(
+        'UPDATE users SET first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name), location = COALESCE(?, location) WHERE id = ?'
+      ).bind(firstName || null, lastParts.join(' ') || null, parsed.location || null, userId).run()
+    }
+    await c.env.DB.prepare(
+      "UPDATE users SET onboarding_step = MAX(onboarding_step, 3), updated_at = datetime('now') WHERE id = ?"
+    ).bind(userId).run()
+
+    return c.json({ success: true, parsed, master_resume_text: markdown, message: `Imported LinkedIn export for ${parsed.name || 'user'}` })
+  } catch (e) {
+    return c.json({ error: `Failed to parse export: ${e.message}` }, 500)
   }
 })
 
