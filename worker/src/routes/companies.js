@@ -145,6 +145,65 @@ async function fetchJobsForCompany(company) {
   }
 }
 
+// ─── Pre-seeded company list (Career-Ops parity) ─────────────────────────────
+// These 50 companies are auto-added for every user on first watchlist access.
+// All use public APIs — no keys required.
+const PRESET_COMPANIES = [
+  // Greenhouse
+  { company_name: 'Anthropic',       ats_type: 'greenhouse', ats_slug: 'anthropic' },
+  { company_name: 'OpenAI',          ats_type: 'greenhouse', ats_slug: 'openai' },
+  { company_name: 'Stripe',          ats_type: 'greenhouse', ats_slug: 'stripe' },
+  { company_name: 'Airbnb',          ats_type: 'greenhouse', ats_slug: 'airbnb' },
+  { company_name: 'Figma',           ats_type: 'greenhouse', ats_slug: 'figma' },
+  { company_name: 'Notion',          ats_type: 'greenhouse', ats_slug: 'notion' },
+  { company_name: 'Robinhood',       ats_type: 'greenhouse', ats_slug: 'robinhood' },
+  { company_name: 'Brex',            ats_type: 'greenhouse', ats_slug: 'brex' },
+  { company_name: 'Gusto',           ats_type: 'greenhouse', ats_slug: 'gusto' },
+  { company_name: 'Rippling',        ats_type: 'greenhouse', ats_slug: 'rippling' },
+  { company_name: 'Lattice',         ats_type: 'greenhouse', ats_slug: 'lattice' },
+  { company_name: 'Ramp',            ats_type: 'greenhouse', ats_slug: 'ramp' },
+  { company_name: 'Scale AI',        ats_type: 'greenhouse', ats_slug: 'scaleai' },
+  { company_name: 'Cohere',          ats_type: 'greenhouse', ats_slug: 'cohere' },
+  { company_name: 'Runway',          ats_type: 'greenhouse', ats_slug: 'runway' },
+  { company_name: 'Intercom',        ats_type: 'greenhouse', ats_slug: 'intercom' },
+  { company_name: 'DoorDash',        ats_type: 'greenhouse', ats_slug: 'doordash' },
+  { company_name: 'Instacart',       ats_type: 'greenhouse', ats_slug: 'instacart' },
+  { company_name: 'Lyft',            ats_type: 'greenhouse', ats_slug: 'lyft' },
+  { company_name: 'Dropbox',         ats_type: 'greenhouse', ats_slug: 'dropbox' },
+  { company_name: 'Zendesk',         ats_type: 'greenhouse', ats_slug: 'zendesk' },
+  { company_name: 'Datadog',         ats_type: 'greenhouse', ats_slug: 'datadog' },
+  { company_name: 'Snowflake',       ats_type: 'greenhouse', ats_slug: 'snowflake' },
+  { company_name: 'MongoDB',         ats_type: 'greenhouse', ats_slug: 'mongodb' },
+  { company_name: 'Databricks',      ats_type: 'greenhouse', ats_slug: 'databricks' },
+  { company_name: 'HashiCorp',       ats_type: 'greenhouse', ats_slug: 'hashicorp' },
+  { company_name: 'ElevenLabs',      ats_type: 'greenhouse', ats_slug: 'elevenlabs' },
+  { company_name: 'Mistral AI',      ats_type: 'greenhouse', ats_slug: 'mistral' },
+  { company_name: 'Perplexity',      ats_type: 'greenhouse', ats_slug: 'perplexity' },
+  { company_name: 'HubSpot',         ats_type: 'greenhouse', ats_slug: 'hubspot' },
+  // Lever
+  { company_name: 'Netflix',         ats_type: 'lever', ats_slug: 'netflix' },
+  { company_name: 'Coinbase',        ats_type: 'lever', ats_slug: 'coinbase' },
+  { company_name: 'Duolingo',        ats_type: 'lever', ats_slug: 'duolingo' },
+  { company_name: 'Reddit',          ats_type: 'lever', ats_slug: 'reddit' },
+  { company_name: 'Square',          ats_type: 'lever', ats_slug: 'square' },
+  { company_name: 'Shopify',         ats_type: 'lever', ats_slug: 'shopify' },
+  { company_name: 'Twilio',          ats_type: 'lever', ats_slug: 'twilio' },
+  { company_name: 'Canva',           ats_type: 'lever', ats_slug: 'canva' },
+  { company_name: 'Miro',            ats_type: 'lever', ats_slug: 'miro' },
+  { company_name: 'Loom',            ats_type: 'lever', ats_slug: 'loom' },
+  // Ashby
+  { company_name: 'Vercel',          ats_type: 'ashby', ats_slug: 'vercel' },
+  { company_name: 'Linear',          ats_type: 'ashby', ats_slug: 'linear' },
+  { company_name: 'Retool',          ats_type: 'ashby', ats_slug: 'retool' },
+  { company_name: 'Replit',          ats_type: 'ashby', ats_slug: 'replit' },
+  { company_name: 'PostHog',         ats_type: 'ashby', ats_slug: 'posthog' },
+  { company_name: 'Resend',          ats_type: 'ashby', ats_slug: 'resend' },
+  { company_name: 'Cal.com',         ats_type: 'ashby', ats_slug: 'cal' },
+  { company_name: 'n8n',             ats_type: 'ashby', ats_slug: 'n8n' },
+  { company_name: 'Trigger.dev',     ats_type: 'ashby', ats_slug: 'trigger' },
+  { company_name: 'Dub',             ats_type: 'ashby', ats_slug: 'dub' },
+]
+
 // ─── Ensure table exists ──────────────────────────────────────────────────────
 async function ensureTable(db) {
   await db.prepare(`
@@ -163,10 +222,28 @@ async function ensureTable(db) {
   `).run()
 }
 
+// ─── Seed preset companies for a new user ────────────────────────────────────
+async function seedPresetCompanies(db, userId) {
+  // Check if user already has any companies (including soft-deleted)
+  const existing = await db.prepare(
+    'SELECT COUNT(*) as cnt FROM company_watchlist WHERE user_id = ?'
+  ).bind(userId).first()
+  if (existing?.cnt > 0) return  // already seeded
+
+  const stmts = PRESET_COMPANIES.map(c =>
+    db.prepare(
+      `INSERT OR IGNORE INTO company_watchlist (id, user_id, company_name, ats_type, ats_slug)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(crypto.randomUUID(), userId, c.company_name, c.ats_type, c.ats_slug)
+  )
+  if (stmts.length) await db.batch(stmts)
+}
+
 // ─── GET /companies/watchlist ─────────────────────────────────────────────────
 companyRoutes.get('/watchlist', async (c) => {
   const userId = c.get('userId')
   await ensureTable(c.env.DB)
+  await seedPresetCompanies(c.env.DB, userId)  // no-op after first visit
   const { results } = await c.env.DB.prepare(
     'SELECT * FROM company_watchlist WHERE user_id = ? AND is_active = 1 ORDER BY company_name ASC'
   ).bind(userId).all()
