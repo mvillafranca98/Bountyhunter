@@ -60,18 +60,20 @@ export default function JobQueue() {
   const [downloading, setDownloading] = useState(false)
   const [workTypeFilter, setWorkTypeFilter] = useState(null)  // null | 'remote' | 'hybrid' | 'onsite'
   const [showSubscription, setShowSubscription] = useState(false)  // false = hide subscription jobs
+  const [dateFilter, setDateFilter] = useState(null)  // null | '1d' | '7d' | '30d'
   const [notes, setNotes] = useState([])
   const [timeline, setTimeline] = useState([])
   const [noteText, setNoteText] = useState('')
   const [notesLoading, setNotesLoading] = useState(false)
 
-  const load = async (status, sort, workType, subscription) => {
+  const load = async (status, sort, workType, subscription, createdAfter) => {
     setLoading(true)
     try {
       const params = { sort }
       if (status) params.status = status
       if (workType) params.work_type = workType
       if (subscription) params.subscription = 'include'
+      if (createdAfter) params.created_after = createdAfter
       const [jobsRes, countsRes] = await Promise.all([
         jobsApi.list(params),
         jobsApi.counts(),
@@ -83,7 +85,15 @@ export default function JobQueue() {
     }
   }
 
-  useEffect(() => { load(activeStatus, sortBy, workTypeFilter, showSubscription) }, [activeStatus, sortBy, workTypeFilter, showSubscription])
+  const getCreatedAfterISO = (filter) => {
+    if (!filter) return null
+    const days = filter === '1d' ? 1 : filter === '7d' ? 7 : 30
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  }
+
+  useEffect(() => {
+    load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+  }, [activeStatus, sortBy, workTypeFilter, showSubscription, dateFilter])
 
   // Load notes + timeline when a job is selected
   useEffect(() => {
@@ -121,7 +131,7 @@ export default function JobQueue() {
       const { data } = await jobsApi.prepare(job.id)
       toast.success('Resume tailored + cover letter ready!')
       setSelected({ ...job, prepared: data })
-      load(activeStatus, sortBy, workTypeFilter, showSubscription)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Preparation failed')
     } finally {
@@ -135,7 +145,7 @@ export default function JobQueue() {
       await applicationsApi.apply(job.id, { method: 'manual' })
       toast.success('Marked as applied!')
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -155,7 +165,7 @@ export default function JobQueue() {
       })
       toast.success('Auto-apply queued!')
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -184,6 +194,32 @@ export default function JobQueue() {
     } finally {
       setDownloading(false)
     }
+  }
+
+  const flagJob = async (jobId, e) => {
+    e.stopPropagation()
+    try {
+      await jobsApi.flag(jobId)
+      setSelected(null)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+    } catch { toast.error('Failed to flag job') }
+  }
+
+  const bulkDeleteFlagged = async () => {
+    if (!window.confirm('Delete all flagged jobs?')) return
+    try {
+      await jobsApi.bulkDelete({ filter: 'flagged' })
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+    } catch { toast.error('Bulk delete failed') }
+  }
+
+  const bulkDeleteOlderThan = async (days) => {
+    if (!window.confirm(`Delete all jobs older than ${days} days?`)) return
+    try {
+      const created_before = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+      await jobsApi.bulkDelete({ created_before })
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+    } catch { toast.error('Bulk delete failed') }
   }
 
   return (
@@ -261,6 +297,54 @@ export default function JobQueue() {
         </button>
       </div>
 
+      {/* Date added filter pills */}
+      <div className="flex items-center gap-1.5">
+        <span className="section-label mr-1">Date added</span>
+        {[
+          { key: null,  label: 'All' },
+          { key: '1d',  label: 'Today' },
+          { key: '7d',  label: '7 days' },
+          { key: '30d', label: '30 days' },
+        ].map(({ key, label }) => (
+          <button
+            key={String(key)}
+            onClick={() => setDateFilter(key)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              dateFilter === key
+                ? 'bg-cobalt text-white'
+                : 'bg-surface-700 text-ink-muted hover:text-ink-primary'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Bulk actions bar */}
+      {jobs.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={bulkDeleteFlagged}
+            className="btn-ghost text-xs border border-surface-600 flex items-center gap-1"
+          >
+            🚩 Delete Flagged
+          </button>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-ink-muted">🗑 Delete older than:</span>
+            <select
+              defaultValue=""
+              onChange={e => { if (e.target.value) { bulkDeleteOlderThan(Number(e.target.value)); e.target.value = '' } }}
+              className="btn-ghost text-xs border border-surface-600 py-1 px-2 rounded cursor-pointer"
+            >
+              <option value="" disabled>Choose…</option>
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="60">60 days</option>
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* Jobs list */}
       <div className="space-y-2">
         {loading && (
@@ -305,6 +389,17 @@ export default function JobQueue() {
                 <FitBadge score={job.fit_score} />
                 {job.posted_at && (
                   <span className="text-xs text-ink-muted">{new Date(job.posted_at).toLocaleDateString()}</span>
+                )}
+                {!['flagged', 'applied', 'expired'].includes(job.status) && (
+                  <button
+                    onClick={(e) => flagJob(job.id, e)}
+                    className="p-1 text-ink-muted hover:text-signal rounded transition-colors"
+                    title="Flag job"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                      <path d="M3.5 2.75a.75.75 0 0 0-1.5 0v14.5a.75.75 0 0 0 1.5 0v-4.392l1.657-.348a6.449 6.449 0 0 1 4.271.572 7.948 7.948 0 0 0 5.965.524l2.078-.64A.75.75 0 0 0 18 12.25v-8.5a.75.75 0 0 0-.904-.734l-2.38.501a7.25 7.25 0 0 1-4.186-.363l-.502-.2a8.75 8.75 0 0 0-5.053-.439L3.5 3.066V2.75Z" />
+                    </svg>
+                  </button>
                 )}
               </div>
             </div>

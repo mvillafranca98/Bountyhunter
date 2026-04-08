@@ -47,19 +47,46 @@ export default function Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Score distribution */}
         <div className="card">
-          <h2 className="section-label mb-4">Fit Score Distribution</h2>
-          <div className="flex items-end gap-3 h-40">
-            {Object.entries(scoreDistribution).map(([range, count]) => (
-              <div key={range} className="flex-1 flex flex-col items-center gap-1.5">
-                <span className="text-xs text-ink-secondary font-medium">{count}</span>
-                <div
-                  className="w-full bg-gradient-cobalt rounded-t transition-all"
-                  style={{ height: `${Math.max((count / maxScoreCount) * 100, 4)}%` }}
-                />
-                <span className="text-xs text-ink-muted">{range}%</span>
-              </div>
-            ))}
+          <h2 className="section-label mb-1">Fit Score Distribution</h2>
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-3 mb-4 text-xs text-ink-muted">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-success inline-block" />Great (80+)</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-warning inline-block" />Good (60–79)</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-brass inline-block" />Fair (40–59)</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-signal inline-block" />Low (&lt;40)</span>
           </div>
+
+          {(() => {
+            const totalScoreCount = Object.values(scoreDistribution).reduce((a, b) => a + b, 0)
+            function barColor(range) {
+              const lower = parseInt(range.split('-')[0], 10)
+              if (lower >= 80) return 'bg-success'
+              if (lower >= 60) return 'bg-warning'
+              if (lower >= 40) return 'bg-brass'
+              return 'bg-signal'
+            }
+            return (
+              <div className="flex items-end gap-3 h-52">
+                {Object.entries(scoreDistribution).map(([range, count]) => {
+                  const pct = totalScoreCount > 0 ? Math.round((count / totalScoreCount) * 100) : 0
+                  return (
+                    <div key={range} className="flex-1 flex flex-col items-center gap-1">
+                      <span className="text-xs text-ink-secondary font-semibold">{count}</span>
+                      <div className="w-full flex flex-col justify-end" style={{ height: '160px' }}>
+                        <div
+                          className={`w-full ${barColor(range)} rounded-t opacity-90 transition-all duration-500`}
+                          style={{ height: `${Math.max((count / maxScoreCount) * 100, 4)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-ink-muted leading-tight">{range}%</span>
+                      <span className="text-[10px] text-ink-muted opacity-70">{pct}%</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Source breakdown */}

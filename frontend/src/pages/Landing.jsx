@@ -153,7 +153,7 @@ function Nav() {
 /* ─── Hero ────────────────────────────────────────────────────────────────── */
 function Hero() {
   const metrics = [
-    { label: '9 sources + ATS watchlist', top: '18%', right: '6%' },
+    { label: '50 companies pre-configured', top: '18%', right: '6%' },
     { label: '10-dimension scoring', top: '55%', left: '3%' },
     { label: 'STAR interview prep included', bottom: '20%', right: '5%' },
   ]
@@ -197,7 +197,7 @@ function Hero() {
           variants={fadeUp} initial="hidden" animate="visible" custom={0.2}
           className="text-ink-secondary text-lg md:text-xl max-w-xl mx-auto mb-10 leading-relaxed"
         >
-          BountyHunter scans 9 job platforms + company career pages, scores every role across 10 dimensions, and generates tailored applications with STAR interview prep — automatically.
+          BountyHunter monitors 50 pre-configured companies on Greenhouse, Lever &amp; Ashby — plus scans 9 live job boards — scores every role across 10 dimensions, and generates tailored applications with STAR interview prep. Automatically.
         </motion.p>
 
         <motion.div
@@ -220,7 +220,7 @@ function Hero() {
 }
 
 /* ─── Source strip ────────────────────────────────────────────────────────── */
-const SOURCES = ['Remotive', 'Arbeitnow', 'RemoteOK', 'HackerNews', 'Himalayas', 'The Muse', 'Jobicy', 'Google Jobs', 'JSearch', 'Greenhouse', 'Lever', 'Ashby', 'Wellfound']
+const SOURCES = ['Greenhouse', 'Lever', 'Ashby', 'Wellfound', 'Remotive', 'Arbeitnow', 'RemoteOK', 'HackerNews', 'Himalayas', 'The Muse', 'Jobicy', 'Google Jobs', 'JSearch']
 
 function SourceStrip() {
   return (
@@ -228,7 +228,7 @@ function SourceStrip() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
         <div className="flex items-center gap-4 mb-6 justify-center">
           <div className="h-px flex-1 max-w-20 bg-surface-600" />
-          <span className="section-label">Aggregating jobs from</span>
+          <span className="section-label">Scanning 9 live sources + 50 companies via ATS</span>
           <div className="h-px flex-1 max-w-20 bg-surface-600" />
         </div>
         <div className="flex flex-wrap justify-center gap-2.5">
@@ -238,6 +238,77 @@ function SourceStrip() {
             </span>
           ))}
         </div>
+      </div>
+    </section>
+  )
+}
+
+/* ─── Companies showcase ──────────────────────────────────────────────────── */
+const COMPANY_GROUPS = [
+  {
+    ats: 'Greenhouse',
+    pillClass: 'bg-cobalt/15 border border-cobalt/30 text-cobalt-light',
+    companies: [
+      'Stripe', 'Airbnb', 'Figma', 'Notion', 'Anthropic', 'OpenAI', 'Robinhood', 'Brex',
+      'Gusto', 'Rippling', 'Lattice', 'Ramp', 'Scale AI', 'Cohere', 'Runway', 'Intercom',
+      'DoorDash', 'Instacart', 'Lyft', 'Dropbox', 'Zendesk', 'Datadog', 'Snowflake',
+      'MongoDB', 'Databricks', 'HashiCorp', 'Vercel (GH)', 'Netlify', 'Supabase',
+      'PlanetScale', 'Neon',
+    ],
+  },
+  {
+    ats: 'Lever',
+    pillClass: 'bg-violet/15 border border-violet/30 text-violet-light',
+    companies: [
+      'Netflix', 'Coinbase', 'Duolingo', 'Reddit', 'Square', 'Shopify', 'Twilio',
+      'Segment', 'Canva', 'Miro', 'Loom',
+    ],
+  },
+  {
+    ats: 'Ashby',
+    pillClass: 'bg-amber-500/15 border border-amber-500/30 text-amber-300',
+    companies: [
+      'Vercel', 'Linear', 'Retool', 'Loom (Ashby)', 'Reflect', 'Replit', 'Cal.com',
+      'Dub', 'Resend', 'Trigger.dev', 'PostHog',
+    ],
+  },
+]
+
+function CompaniesShowcase() {
+  return (
+    <section className="py-24 bg-surface-950">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <ScrollReveal className="text-center mb-12">
+          <h2 className="font-display text-h2 font-bold text-ink-primary mb-4">
+            50 companies pre-configured — day one
+          </h2>
+          <p className="text-ink-muted text-base max-w-2xl mx-auto leading-relaxed">
+            Add any company via Greenhouse, Lever, Ashby, or Wellfound slug. Career-Ops-level coverage, built into your personal queue.
+          </p>
+        </ScrollReveal>
+
+        <ScrollReveal>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {COMPANY_GROUPS.map(({ ats, pillClass, companies }) =>
+              companies.map((name) => (
+                <span
+                  key={`${ats}-${name}`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium font-display cursor-default select-none transition-opacity hover:opacity-80 ${pillClass}`}
+                >
+                  {name}
+                </span>
+              ))
+            )}
+          </div>
+
+          <div className="mt-6 text-center text-xs text-ink-muted flex items-center justify-center gap-4">
+            <span>🔵 Greenhouse</span>
+            <span>·</span>
+            <span>🟣 Lever</span>
+            <span>·</span>
+            <span>🟡 Ashby</span>
+          </div>
+        </ScrollReveal>
       </div>
     </section>
   )
@@ -432,6 +503,7 @@ export default function Landing() {
       <Nav />
       <Hero />
       <SourceStrip />
+      <CompaniesShowcase />
       <Capabilities />
       <HowItWorks />
       <FeatureGrid />

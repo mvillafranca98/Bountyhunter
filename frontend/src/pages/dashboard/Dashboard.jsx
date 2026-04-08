@@ -15,6 +15,9 @@ function StatCard({ label, value, color = 'text-ink-primary', sub }) {
 }
 
 function FitPill({ score }) {
+  if (score === null || score === undefined) {
+    return <span className="fit-pill font-display font-bold bg-surface-800 text-ink-muted">Scoring…</span>
+  }
   const color =
     score >= 80
       ? 'bg-success/15 text-success'
@@ -22,6 +25,96 @@ function FitPill({ score }) {
       ? 'bg-warning/15 text-warning'
       : 'bg-signal/15 text-signal'
   return <span className={`fit-pill font-display font-bold ${color}`}>{score}%</span>
+}
+
+function WorkTypeBadge({ workType }) {
+  const map = {
+    remote:  { label: '🌐 Remote',  cls: 'badge-cobalt' },
+    hybrid:  { label: '🔄 Hybrid',  cls: 'badge-violet' },
+    onsite:  { label: '🏢 On-site', cls: 'badge-amber' },
+    'on-site': { label: '🏢 On-site', cls: 'badge-amber' },
+  }
+  const key = (workType || '').toLowerCase().replace(/\s+/g, '')
+  const entry = map[key]
+  if (!entry) return <span className="badge badge-gray">❓ Unknown</span>
+  return <span className={`badge ${entry.cls}`}>{entry.label}</span>
+}
+
+function SalaryDisplay({ job }) {
+  if (typeof job.salary === 'string' && job.salary.trim()) {
+    return <span className="text-xs text-ink-muted">{job.salary}</span>
+  }
+  if (job.salary_min != null && job.salary_max != null) {
+    const unit = job.salary_type === 'monthly' ? '/ mo' : '/ yr'
+    const fmt = (n) => `$${Number(n).toLocaleString()}`
+    return <span className="text-xs text-ink-muted">{fmt(job.salary_min)} – {fmt(job.salary_max)} {unit}</span>
+  }
+  return null
+}
+
+function SearchResultCard({ job }) {
+  const fitScore = job.fit_score ?? null
+  const fitCls =
+    fitScore === null
+      ? 'badge badge-gray'
+      : fitScore >= 80
+      ? 'badge badge-green'
+      : fitScore >= 65
+      ? 'badge badge-amber'
+      : 'badge badge-red'
+
+  return (
+    <div className="card-hover flex flex-col gap-2 hover:border-cobalt/40 transition-all">
+      {/* Top row: badges */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={fitCls}>
+          {fitScore === null ? 'Scoring…' : `${fitScore}%`}
+        </span>
+        <WorkTypeBadge workType={job.work_type} />
+        {job.requires_subscription === 1 && (
+          <span className="badge badge-violet">💳 Subscription</span>
+        )}
+      </div>
+
+      {/* Title + company */}
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-ink-primary text-sm leading-snug truncate">{job.title}</p>
+        <p className="text-ink-muted text-sm truncate">
+          {job.company}{job.location ? ` · ${job.location}` : ''}
+        </p>
+        <SalaryDisplay job={job} />
+      </div>
+
+      {/* Link */}
+      {job.url && (
+        <a
+          href={job.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-cobalt-light hover:underline self-start"
+        >
+          View →
+        </a>
+      )}
+    </div>
+  )
+}
+
+const MAX_SUBSCRIPTION_JOBS = 2
+const MAX_RESULTS_SHOWN = 10
+
+function filterAndSliceResults(jobs) {
+  let subCount = 0
+  const filtered = []
+  for (const job of jobs) {
+    if (job.requires_subscription === 1) {
+      if (subCount >= MAX_SUBSCRIPTION_JOBS) continue
+      subCount++
+    }
+    filtered.push(job)
+    if (filtered.length >= MAX_RESULTS_SHOWN) break
+  }
+  return filtered
 }
 
 export default function Dashboard() {
@@ -36,6 +129,7 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState([])
   const [alertKeywords, setAlertKeywords] = useState('')
   const [creatingAlert, setCreatingAlert] = useState(false)
+  const [searchResults, setSearchResults] = useState([])
 
   useEffect(() => {
     dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
@@ -45,6 +139,8 @@ export default function Dashboard() {
   const loadAlerts = () => {
     alertsApi.list().then(r => setAlerts(r.data.alerts || [])).catch(() => {})
   }
+
+  const clearResults = () => setSearchResults([])
 
   const createAlert = async () => {
     if (!alertKeywords.trim()) return
@@ -84,8 +180,11 @@ export default function Dashboard() {
     e.preventDefault()
     setSearching(true)
     try {
-      const { data: r } = await jobsApi.search({ keywords: searchQuery || undefined })
-      toast.success(r.message)
+      const { data: r } = await jobsApi.realSearch({ keywords: searchQuery })
+      toast.success(r.message || 'Search complete!')
+      const jobs = r.jobs || []
+      setSearchResults(filterAndSliceResults(jobs))
+      dashboardApi.summary().then(res => setData(res.data)).catch(() => {})
     } catch (err) {
       toast.error(err.response?.data?.error || 'Search failed')
     } finally {
@@ -98,7 +197,6 @@ export default function Dashboard() {
     try {
       const { data: r } = await jobsApi.seed()
       toast.success(r.message || 'Sample jobs loaded!')
-      // Reload dashboard stats
       dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to load sample jobs')
@@ -110,17 +208,17 @@ export default function Dashboard() {
   const findRealJobs = async () => {
     setFindingReal(true)
     try {
-      const { data: r } = await jobsApi.realSearch({ keywords: searchQuery || undefined })
+      const { data: r } = await jobsApi.realSearch()
       toast.success(r.message || 'Real jobs loaded!')
-      // Show which sources returned results
       if (r.sources) {
-        const okSources = r.sources.filter(s => s.status === 'ok' && s.count > 0)
         const failedSources = r.sources.filter(s => s.status === 'error')
         if (failedSources.length > 0) {
           toast.warn(`Some sources unavailable: ${failedSources.map(s => s.name).join(', ')}`, { autoClose: 4000 })
         }
       }
-      dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
+      const jobs = r.jobs || []
+      setSearchResults(filterAndSliceResults(jobs))
+      dashboardApi.summary().then(res => setData(res.data)).catch(() => {})
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to find real jobs')
     } finally {
@@ -135,7 +233,6 @@ export default function Dashboard() {
       const { data } = await jobsApi.importUrl({ url: importUrl.trim() })
       toast.success(data.message || 'Job imported!')
       setImportUrl('')
-      // Refresh dashboard
       dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to import job from URL')
@@ -147,7 +244,6 @@ export default function Dashboard() {
   const flagJob = async (jobId) => {
     try {
       await jobsApi.flag(jobId)
-      // Remove flagged job from top_jobs list
       setData(prev => ({
         ...prev,
         top_jobs: (prev?.top_jobs || []).filter(j => j.id !== jobId),
@@ -204,7 +300,7 @@ export default function Dashboard() {
                 Generating sample jobs… (~30s)
               </>
             ) : (
-              '\u2728 Load 5 AI-scored sample jobs'
+              '✨ Load 5 AI-scored sample jobs'
             )}
           </button>
           <button
@@ -218,10 +314,35 @@ export default function Dashboard() {
                 Finding & scoring real jobs… (~30s)
               </>
             ) : (
-              '\uD83D\uDD0D Find real jobs'
+              '🔍 Find real jobs'
             )}
           </button>
         </div>
+      </div>
+
+      {/* Search results panel */}
+      {searchResults.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-semibold text-ink-primary">Latest search results</h2>
+            <button onClick={clearResults} className="btn-ghost text-xs px-3 py-1 border border-surface-600 hover:border-cobalt">
+              Clear
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {searchResults.map((job, idx) => (
+              <SearchResultCard key={job.id ?? idx} job={job} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Applied" value={counts.applied || 0} color="text-success" />
+        <StatCard label="Ready to apply" value={(counts.scored || 0) + (counts.ready || 0)} color="text-cobalt-light" />
+        <StatCard label="Needs you" value={counts.needs_manual || 0} color="text-warning" />
+        <StatCard label="Expired / gone" value={counts.expired || 0} color="text-ink-muted" />
       </div>
 
       {/* Import job by URL */}
@@ -298,14 +419,6 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Applied" value={counts.applied || 0} color="text-success" />
-        <StatCard label="Ready to apply" value={(counts.scored || 0) + (counts.ready || 0)} color="text-cobalt-light" />
-        <StatCard label="Needs you" value={counts.needs_manual || 0} color="text-warning" />
-        <StatCard label="Expired / gone" value={counts.expired || 0} color="text-ink-muted" />
       </div>
 
       {/* Two columns */}

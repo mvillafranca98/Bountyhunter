@@ -12,6 +12,7 @@ import QuestionBank from './pages/dashboard/QuestionBank'
 import Profile from './pages/dashboard/Profile'
 import ResumeStudio from './pages/dashboard/ResumeStudio'
 import Analytics from './pages/dashboard/Analytics'
+import Companies from './pages/dashboard/Companies'
 
 function Spinner() {
   return (
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="questions"    element={<QuestionBank />} />
           <Route path="resume"       element={<ResumeStudio />} />
           <Route path="analytics"    element={<Analytics />} />
+          <Route path="companies"    element={<Companies />} />
           <Route path="profile"      element={<Profile />} />
         </Route>
 

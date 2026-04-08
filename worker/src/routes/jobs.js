@@ -697,6 +697,12 @@ jobRoutes.get('/', async (c) => {
     query += ' AND (requires_subscription = 0 OR requires_subscription IS NULL)'
   }
 
+  const createdAfter = c.req.query('created_after')
+  if (createdAfter) {
+    query += ' AND created_at >= ?'
+    bindings.push(createdAfter)
+  }
+
   // Sort order
   if (sort === 'oldest') {
     query += ' ORDER BY created_at ASC'
@@ -1092,6 +1098,43 @@ jobRoutes.get('/:id/timeline', async (c) => {
   timeline.sort((a, b) => new Date(b.date) - new Date(a.date))
 
   return c.json({ timeline })
+})
+
+// DELETE /jobs?filter=flagged  — bulk delete all flagged jobs for the user
+// DELETE /jobs?created_before=DATE — bulk delete jobs created on or before DATE
+jobRoutes.delete('/', async (c) => {
+  const userId = c.get('userId')
+  const filter = c.req.query('filter')
+  const createdBefore = c.req.query('created_before')
+
+  if (filter === 'flagged') {
+    const result = await c.env.DB.prepare(
+      "DELETE FROM jobs WHERE user_id = ? AND status = 'flagged'"
+    ).bind(userId).run()
+    return c.json({ deleted: result.meta?.changes ?? 0 })
+  }
+
+  if (createdBefore) {
+    const result = await c.env.DB.prepare(
+      'DELETE FROM jobs WHERE user_id = ? AND created_at <= ?'
+    ).bind(userId, createdBefore).run()
+    return c.json({ deleted: result.meta?.changes ?? 0 })
+  }
+
+  return c.json({ error: 'Provide filter=flagged or created_before=DATE' }, 400)
+})
+
+// DELETE /jobs/:id — hard delete a single job
+jobRoutes.delete('/:id', async (c) => {
+  const userId = c.get('userId')
+  const id = c.req.param('id')
+
+  const result = await c.env.DB.prepare(
+    'DELETE FROM jobs WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).run()
+
+  if (!result.meta?.changes) return c.json({ error: 'Not found' }, 404)
+  return c.json({ success: true })
 })
 
 // PUT /jobs/:id/status

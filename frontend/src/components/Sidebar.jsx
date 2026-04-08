@@ -8,6 +8,7 @@ const navItems = [
   { to: '/dashboard/resume',       label: 'Resume',       icon: DocumentIcon },
   { to: '/dashboard/questions',    label: 'Question Bank',icon: ChatIcon },
   { to: '/dashboard/analytics',    label: 'Analytics',    icon: ChartIcon },
+  { to: '/dashboard/companies',    label: 'Companies',    icon: BuildingIcon },
   { to: '/dashboard/profile',      label: 'Profile',      icon: UserIcon },
 ]
 
@@ -104,6 +105,9 @@ function ChartIcon({ className }) {
 }
 function UserIcon({ className }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+}
+function BuildingIcon({ className }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0H3m2 0H3m0 0h18M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
 }
 function LogoutIcon({ className }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>

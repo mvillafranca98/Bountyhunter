@@ -70,6 +70,8 @@ export const jobsApi = {
   addNote: (id, content) => api.post(`/jobs/${id}/notes`, { content }),
   deleteNote: (id, noteId) => api.delete(`/jobs/${id}/notes/${noteId}`),
   getTimeline: (id) => api.get(`/jobs/${id}/timeline`),
+  deleteJob: (id) => api.delete(`/jobs/${id}`),
+  bulkDelete: (params) => api.delete('/jobs', { params }),
 }
 
 // ─── Applications ──────────────────────────────────────────────────────────────
@@ -95,6 +97,15 @@ export const alertsApi = {
   create: (data) => api.post('/alerts', data),
   delete: (id) => api.delete(`/alerts/${id}`),
   toggle: (id) => api.put(`/alerts/${id}/toggle`),
+}
+
+// ─── Companies ────────────────────────────────────────────────────────────────
+export const companiesApi = {
+  list: () => api.get('/companies/watchlist'),
+  add: (data) => api.post('/companies/watchlist', data),
+  remove: (id) => api.delete(`/companies/watchlist/${id}`),
+  scanAll: () => api.post('/companies/scan', {}, { timeout: 120000 }),
+  scanOne: (id) => api.post(`/companies/scan/${id}`, {}, { timeout: 60000 }),
 }
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
