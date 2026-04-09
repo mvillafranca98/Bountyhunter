@@ -622,8 +622,8 @@ jobRoutes.post('/real-search', async (c) => {
     let fitReasoning = null
     let status = 'new'
 
-    // Score top 10 with Claude for better relevance filtering
-    if (hasAI && i < 10) {
+    // Score top 5 with Claude to stay within timeout window
+    if (hasAI && i < 5) {
       try {
         const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
         fitScore = result.score
@@ -1209,4 +1209,5 @@ jobRoutes.put('/:id/status', async (c) => {
 
   return c.json({ success: true })
 })
+
 

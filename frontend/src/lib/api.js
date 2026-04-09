@@ -58,7 +58,7 @@ export const resumeApi = {
 export const jobsApi = {
   search: (data) => api.post('/jobs/search', data),
   seed: () => api.post('/jobs/seed', {}, { timeout: 90000 }), // AI generates 5 jobs — allow 90s
-  realSearch: (data) => api.post('/jobs/real-search', data || {}, { timeout: 90000 }),
+  realSearch: (data) => api.post('/jobs/real-search', data || {}, { timeout: 120000 }),
   list: (params) => api.get('/jobs', { params }),
   counts: () => api.get('/jobs/counts'),
   get: (id) => api.get(`/jobs/${id}`),
@@ -118,3 +118,4 @@ export const dashboardApi = {
 }
 
 export default api
+
