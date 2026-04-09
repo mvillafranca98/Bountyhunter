@@ -5,6 +5,25 @@ import { generateId } from '../lib/crypto.js'
 export const companyRoutes = new Hono()
 companyRoutes.use('*', requireAuth)
 
+// Reject jobs with bad titles/URLs before insertion (same rules as jobs.js)
+const JUNK_TITLE_WORDS = new Set([
+  'remote', 'hybrid', 'onsite', 'on-site', 'usa', 'us', 'eu', 'europe',
+  'worldwide', 'full-time', 'fulltime', 'part-time', 'contract', 'freelance',
+  'see posting', 'unknown', 'n/a', 'tbd', 'job', 'hiring',
+])
+function isValidJob(job) {
+  const title = (job.title || '').trim()
+  const company = (job.company || '').trim()
+  const url = (job.url || '').trim()
+  if (!url || !/^https?:\/\/[^\s]+\.[^\s]+/.test(url)) return false
+  if (title.length < 3 || title.length > 150) return false
+  if (JUNK_TITLE_WORDS.has(title.toLowerCase())) return false
+  if (/^[A-Z\s\-]+$/.test(title) && title.split(/\s+/).length <= 2) return false
+  if (!company || company.length < 2) return false
+  if (/https?:\/\//.test(company)) return false
+  return true
+}
+
 // ─── ATS Scraper Helpers ──────────────────────────────────────────────────────
 
 // Greenhouse: https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true
@@ -323,6 +342,9 @@ companyRoutes.post('/scan', async (c) => {
       // Override company name with the user-provided name (slug may differ)
       job.company = company.company_name
 
+      // Skip jobs with bad titles / broken URLs
+      if (!isValidJob(job)) continue
+
       const id = generateId()
       const insert = await c.env.DB.prepare(
         `INSERT OR IGNORE INTO jobs
@@ -386,6 +408,7 @@ companyRoutes.post('/scan/:id', async (c) => {
   let newCount = 0
   for (const job of jobs) {
     job.company = company.company_name
+    if (!isValidJob(job)) continue
     const id = generateId()
     const insert = await c.env.DB.prepare(
       `INSERT OR IGNORE INTO jobs
@@ -422,3 +445,4 @@ companyRoutes.get('/ats-types', async (c) => {
     ]
   })
 })
+

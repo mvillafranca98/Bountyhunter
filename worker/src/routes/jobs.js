@@ -343,31 +343,40 @@ async function fetchHackerNews(keywords) {
 
     return matched.slice(0, 10).map(hit => {
       const text = hit.comment_text || ''
-      const parts = text.split(/\n/)[0].split('|').map(s => s.replace(/<[^>]*>/g, '').trim())
-      const company = parts[0] || 'Unknown'
-      const title = parts.length > 2 ? parts[1] : 'See posting'
-      const locationPart = parts.find(p => /remote/i.test(p)) || (parts.length > 2 ? parts[2] : '')
-      const urlMatch = text.match(/href="([^"]+)"/) || text.match(/(https?:\/\/[^\s<"]+)/)
-      const url = urlMatch ? urlMatch[1] : `https://news.ycombinator.com/item?id=${hit.objectID}`
-      const location = locationPart || ''
+      // HN "Who is hiring" format: "Company | Title | Location | Remote/Onsite | ..."
+      // Only accept comments with at least 3 pipe-separated parts.
+      const firstLine = text.split(/\n/)[0]
+      const parts = firstLine.split('|').map(s => s.replace(/<[^>]*>/g, '').trim()).filter(Boolean)
+      if (parts.length < 3) return null  // Not a standard hiring post — skip
+
+      const company = parts[0]
+      const title = parts[1]
+      const locationPart = parts.slice(2).find(p => /remote|onsite|hybrid|[A-Z]{2}/i.test(p)) || parts[2] || ''
+      // Require an external URL — HN thread links are useless, the job itself must have a target
+      const urlMatch = text.match(/href="(https?:\/\/[^"]+)"/) || text.match(/(https?:\/\/[^\s<"]+)/)
+      if (!urlMatch) return null
+      const url = urlMatch[1]
+      // Skip self-referential HN links
+      if (/news\.ycombinator\.com/.test(url)) return null
+
       const description = cleanDescription(text).slice(0, 2000)
       const { requires_subscription, subscription_hint } = detectSubscription('hackernews', url, description)
 
       return {
         title,
         company,
-        location,
+        location: locationPart,
         url,
         description,
         source: 'hackernews',
         external_id: String(hit.objectID),
         salary: null,
         posted_at: hit.created_at,
-        work_type: inferWorkType(location, description),
+        work_type: inferWorkType(locationPart, description),
         requires_subscription,
         subscription_hint,
       }
-    })
+    }).filter(Boolean)
   } catch (err) {
     console.error('HackerNews fetch failed:', err.message)
     return []
@@ -453,6 +462,35 @@ function deduplicateJobs(jobs) {
   })
 }
 
+// ─── Helper: reject jobs with garbage titles, bad URLs, or missing fields ────
+// These typically come from loosely-parsed sources (HN comments, scraped lists)
+// and make the queue unusable. Better to drop them than insert broken rows.
+const JUNK_TITLE_WORDS = new Set([
+  'remote', 'hybrid', 'onsite', 'on-site', 'usa', 'us', 'eu', 'europe',
+  'worldwide', 'full-time', 'fulltime', 'part-time', 'contract', 'freelance',
+  'see posting', 'unknown', 'n/a', 'tbd', 'job', 'hiring',
+])
+function isValidJob(job) {
+  const title = (job.title || '').trim()
+  const company = (job.company || '').trim()
+  const url = (job.url || '').trim()
+
+  // Must have a non-empty absolute http(s) URL
+  if (!url || !/^https?:\/\/[^\s]+\.[^\s]+/.test(url)) return false
+
+  // Title must be reasonable length (3-150 chars) and not a junk keyword
+  if (title.length < 3 || title.length > 150) return false
+  if (JUNK_TITLE_WORDS.has(title.toLowerCase())) return false
+  // Reject ALL-CAPS single-word titles (REMOTE, FULLTIME, etc.)
+  if (/^[A-Z\s\-]+$/.test(title) && title.split(/\s+/).length <= 2) return false
+
+  // Company must be present and not contain a URL (parse failures often stuff URLs here)
+  if (!company || company.length < 2) return false
+  if (/https?:\/\//.test(company)) return false
+
+  return true
+}
+
 // ─── Helper: infer work type from location + description ─────────────────────
 function inferWorkType(location, description) {
   const text = `${location || ''} ${description || ''}`.toLowerCase()
@@ -533,8 +571,8 @@ jobRoutes.post('/real-search', async (c) => {
     }
   })
 
-  // Deduplicate and limit
-  allJobs = deduplicateJobs(allJobs).slice(0, 15)
+  // Deduplicate, drop invalid jobs (bad titles/URLs), then limit
+  allJobs = deduplicateJobs(allJobs).filter(isValidJob).slice(0, 15)
 
   // Optionally score top 5 with Claude if API key is available
   const hasAI = c.env.ANTHROPIC_API_KEY && !c.env.ANTHROPIC_API_KEY.startsWith('REPLACE_')
@@ -1170,6 +1208,30 @@ jobRoutes.delete('/', async (c) => {
     const result = await c.env.DB.prepare(
       "DELETE FROM jobs WHERE user_id = ? AND status IN ('new', 'scored', 'low_fit')"
     ).bind(userId).run()
+    return c.json({ deleted: result.meta?.changes ?? 0 })
+  }
+
+  if (filter === 'invalid') {
+    // Delete jobs with garbage data: empty/missing URLs, single-word caps titles,
+    // "See posting" fallback titles, or company fields containing URLs.
+    const result = await c.env.DB.prepare(`
+      DELETE FROM jobs
+      WHERE user_id = ?
+        AND (
+          url IS NULL
+          OR url = ''
+          OR url NOT LIKE 'http%'
+          OR title IS NULL
+          OR LENGTH(title) < 3
+          OR LENGTH(title) > 150
+          OR UPPER(title) = title AND LENGTH(title) < 15
+          OR LOWER(title) IN ('remote', 'hybrid', 'onsite', 'see posting', 'unknown', 'n/a', 'job', 'hiring')
+          OR company IS NULL
+          OR LENGTH(company) < 2
+          OR company LIKE '%http://%'
+          OR company LIKE '%https://%'
+        )
+    `).bind(userId).run()
     return c.json({ deleted: result.meta?.changes ?? 0 })
   }
 

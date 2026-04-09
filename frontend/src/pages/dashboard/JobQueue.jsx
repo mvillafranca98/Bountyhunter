@@ -260,6 +260,16 @@ export default function JobQueue() {
     } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete unreviewed jobs') }
   }
 
+  const cleanupInvalid = async () => {
+    if (!window.confirm('Clean up jobs with broken URLs or garbage titles? This removes data from loosely-parsed sources.')) return
+    try {
+      const { data } = await jobsApi.bulkDelete({ filter: 'invalid' })
+      toast.success(`Removed ${data.deleted} invalid jobs`)
+      setSelected(null)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
+    } catch (err) { toast.error(err.response?.data?.error || 'Cleanup failed') }
+  }
+
   const bulkDeleteFlagged = async () => {
     if (!window.confirm('Delete all flagged jobs?')) return
     try {
@@ -298,6 +308,13 @@ export default function JobQueue() {
               🗑 Delete all unreviewed
             </button>
           )}
+          <button
+            onClick={cleanupInvalid}
+            className="btn-ghost text-xs border border-brass/40 text-brass hover:bg-brass/10 px-3 py-1.5"
+            title="Remove jobs with broken URLs or malformed titles"
+          >
+            🧹 Clean up invalid
+          </button>
           <span className="text-sm text-ink-muted">Sort by:</span>
           <select
             value={sortBy}
