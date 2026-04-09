@@ -1166,6 +1166,13 @@ jobRoutes.delete('/', async (c) => {
     return c.json({ deleted: result.meta?.changes ?? 0 })
   }
 
+  if (filter === 'unreviewed') {
+    const result = await c.env.DB.prepare(
+      "DELETE FROM jobs WHERE user_id = ? AND status IN ('new', 'scored', 'low_fit')"
+    ).bind(userId).run()
+    return c.json({ deleted: result.meta?.changes ?? 0 })
+  }
+
   if (createdBefore) {
     const result = await c.env.DB.prepare(
       'DELETE FROM jobs WHERE user_id = ? AND created_at <= ?'
@@ -1202,3 +1209,4 @@ jobRoutes.put('/:id/status', async (c) => {
 
   return c.json({ success: true })
 })
+
