@@ -237,6 +237,27 @@ export default function JobQueue() {
     } catch { toast.error('Failed to flag job') }
   }
 
+  const shortlistJob = async (jobId, e) => {
+    e.stopPropagation()
+    try {
+      await jobsApi.updateStatus(jobId, 'ready')
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'ready' } : j))
+      if (selected?.id === jobId) setSelected(s => ({ ...s, status: 'ready' }))
+      toast.success('Shortlisted ✓')
+    } catch { toast.error('Failed to shortlist') }
+  }
+
+  const deleteUnreviewed = async () => {
+    const unreviewed = counts.new + counts.scored + counts.low_fit || 0
+    if (!window.confirm(`Delete all ${unreviewed} unreviewed jobs (new, scored, low fit)? Your shortlisted, applied, and flagged jobs will be kept.`)) return
+    try {
+      const { data } = await jobsApi.bulkDelete({ filter: 'unreviewed' })
+      toast.success(`Deleted ${data.deleted} unreviewed jobs`)
+      setSelected(null)
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
+    } catch { toast.error('Bulk delete failed') }
+  }
+
   const bulkDeleteFlagged = async () => {
     if (!window.confirm('Delete all flagged jobs?')) return
     try {
@@ -258,8 +279,23 @@ export default function JobQueue() {
     <div className="space-y-6">
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="font-display text-3xl font-bold text-ink-primary">Job Queue</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-3xl font-bold text-ink-primary">Job Queue</h1>
+          {((counts.new || 0) + (counts.scored || 0) + (counts.low_fit || 0)) > 0 && (
+            <span className="badge badge-amber text-xs">
+              {(counts.new || 0) + (counts.scored || 0) + (counts.low_fit || 0)} unreviewed
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
+          {((counts.new || 0) + (counts.scored || 0) + (counts.low_fit || 0)) > 0 && (
+            <button
+              onClick={deleteUnreviewed}
+              className="btn-ghost text-xs border border-signal/40 text-signal hover:bg-signal/10 px-3 py-1.5"
+            >
+              🗑 Delete all unreviewed
+            </button>
+          )}
           <span className="text-sm text-ink-muted">Sort by:</span>
           <select
             value={sortBy}
@@ -470,17 +506,31 @@ export default function JobQueue() {
                 {job.posted_at && (
                   <span className="text-xs text-ink-muted">{new Date(job.posted_at).toLocaleDateString()}</span>
                 )}
-                {!['flagged', 'applied', 'expired'].includes(job.status) && (
-                  <button
-                    onClick={(e) => flagJob(job.id, e)}
-                    className="p-1 text-ink-muted hover:text-signal rounded transition-colors"
-                    title="Flag job"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                      <path d="M3.5 2.75a.75.75 0 0 0-1.5 0v14.5a.75.75 0 0 0 1.5 0v-4.392l1.657-.348a6.449 6.449 0 0 1 4.271.572 7.948 7.948 0 0 0 5.965.524l2.078-.64A.75.75 0 0 0 18 12.25v-8.5a.75.75 0 0 0-.904-.734l-2.38.501a7.25 7.25 0 0 1-4.186-.363l-.502-.2a8.75 8.75 0 0 0-5.053-.439L3.5 3.066V2.75Z" />
-                    </svg>
-                  </button>
-                )}
+                <div className="flex items-center gap-1">
+                  {!['ready', 'applied', 'needs_manual'].includes(job.status) && (
+                    <button
+                      onClick={(e) => shortlistJob(job.id, e)}
+                      className="p-1 text-ink-muted hover:text-brass rounded transition-colors"
+                      title="Shortlist job"
+                    >
+                      ⭐
+                    </button>
+                  )}
+                  {job.status === 'ready' && (
+                    <span className="text-xs text-brass" title="Shortlisted">⭐</span>
+                  )}
+                  {!['flagged', 'applied', 'expired'].includes(job.status) && (
+                    <button
+                      onClick={(e) => flagJob(job.id, e)}
+                      className="p-1 text-ink-muted hover:text-signal rounded transition-colors"
+                      title="Flag job"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                        <path d="M3.5 2.75a.75.75 0 0 0-1.5 0v14.5a.75.75 0 0 0 1.5 0v-4.392l1.657-.348a6.449 6.449 0 0 1 4.271.572 7.948 7.948 0 0 0 5.965.524l2.078-.64A.75.75 0 0 0 18 12.25v-8.5a.75.75 0 0 0-.904-.734l-2.38.501a7.25 7.25 0 0 1-4.186-.363l-.502-.2a8.75 8.75 0 0 0-5.053-.439L3.5 3.066V2.75Z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
