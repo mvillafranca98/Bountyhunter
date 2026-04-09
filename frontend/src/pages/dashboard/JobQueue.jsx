@@ -89,6 +89,8 @@ export default function JobQueue() {
       setJobs(jobsRes.data.jobs)
       setTotalCount(jobsRes.data.total ?? jobsRes.data.jobs.length)
       setCounts(countsRes.data.counts)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load jobs')
     } finally {
       setLoading(false)
     }
@@ -255,7 +257,7 @@ export default function JobQueue() {
       toast.success(`Deleted ${data.deleted} unreviewed jobs`)
       setSelected(null)
       load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
-    } catch { toast.error('Bulk delete failed') }
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete unreviewed jobs') }
   }
 
   const bulkDeleteFlagged = async () => {
@@ -263,7 +265,7 @@ export default function JobQueue() {
     try {
       await jobsApi.bulkDelete({ filter: 'flagged' })
       load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
-    } catch { toast.error('Bulk delete failed') }
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete flagged jobs') }
   }
 
   const bulkDeleteOlderThan = async (days) => {
@@ -272,7 +274,7 @@ export default function JobQueue() {
       const created_before = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
       await jobsApi.bulkDelete({ created_before })
       load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
-    } catch { toast.error('Bulk delete failed') }
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete old jobs') }
   }
 
   return (
@@ -732,3 +734,4 @@ export default function JobQueue() {
     </div>
   )
 }
+
