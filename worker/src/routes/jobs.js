@@ -495,7 +495,16 @@ jobRoutes.post('/real-search', async (c) => {
   // Build source fetchers — always include free sources, add premium sources if keys available
   const hasRapidApi = c.env.RAPIDAPI_KEY && !c.env.RAPIDAPI_KEY.startsWith('REPLACE_')
   const hasSerpApi = c.env.SERPAPI_KEY && !c.env.SERPAPI_KEY.startsWith('REPLACE_')
-  const sourceFetchers = [
+  // Fetch user's disabled sources
+  const disabledSourcesRow = await c.env.DB.prepare(
+    'SELECT disabled_sources FROM user_preferences WHERE user_id = ?'
+  ).bind(userId).first().catch(() => null)
+  const disabledSources = disabledSourcesRow?.disabled_sources
+    ? JSON.parse(disabledSourcesRow.disabled_sources)
+    : []
+  const isEnabled = (name) => !disabledSources.includes(name)
+
+  const allSourceFetchers = [
     ...(hasSerpApi ? [{ name: 'google_jobs', fn: () => fetchGoogleJobs(keywords, c.env.SERPAPI_KEY) }] : []),
     { name: 'remotive', fn: () => fetchRemotive(keywords) },
     { name: 'arbeitnow', fn: () => fetchArbeitnow(keywords) },
@@ -504,10 +513,9 @@ jobRoutes.post('/real-search', async (c) => {
     { name: 'jobicy', fn: () => fetchJobicy(keywords) },
     { name: 'hackernews', fn: () => fetchHackerNews(keywords) },
     { name: 'himalayas', fn: () => fetchHimalayas(keywords) },
+    ...(hasRapidApi ? [{ name: 'jsearch', fn: () => fetchJSearch(keywords, c.env.RAPIDAPI_KEY) }] : []),
   ]
-  if (hasRapidApi) {
-    sourceFetchers.push({ name: 'jsearch', fn: () => fetchJSearch(keywords, c.env.RAPIDAPI_KEY) })
-  }
+  const sourceFetchers = allSourceFetchers.filter(s => isEnabled(s.name))
 
   // Query all sources in parallel
   const results = await Promise.allSettled(sourceFetchers.map(s => s.fn()))
@@ -570,10 +578,32 @@ jobRoutes.post('/real-search', async (c) => {
   }
 
   // Filter out subscription jobs by default unless user has opted in
-  // (subscriptionFilter param can be 'include' to override)
   const subscriptionFilter = body.subscriptionFilter || 'exclude'
   if (subscriptionFilter === 'exclude') {
     allJobs = allJobs.filter(job => !job.requires_subscription)
+  }
+
+  // Keyword relevance pre-filter: score each job by how many resume/search keywords appear
+  // in the title + description. Keep jobs with at least 1 match to improve relevance.
+  if (hasAI && parsedResume) {
+    const resumeSkills = (parsedResume.skills || []).flatMap(s =>
+      typeof s === 'string' ? s.toLowerCase().split(/[,/\s]+/) : []
+    ).filter(s => s.length > 2)
+    const resumeTitles = (parsedResume.experience || []).map(e => (e.title || '').toLowerCase())
+    const searchTerms = keywords.toLowerCase().split(/[\s,]+/).filter(k => k.length > 2)
+    const keywordSet = [...new Set([...resumeSkills, ...searchTerms])]
+
+    if (keywordSet.length > 0) {
+      allJobs = allJobs
+        .map(job => {
+          const haystack = `${job.title} ${job.description || ''}`.toLowerCase()
+          const matches = keywordSet.filter(k => haystack.includes(k)).length
+          return { ...job, _kwScore: matches }
+        })
+        .filter(job => job._kwScore > 0)
+        .sort((a, b) => b._kwScore - a._kwScore)
+        .slice(0, 20) // take top 20 keyword-relevant jobs for AI scoring
+    }
   }
 
   if (!allJobs.length) {
@@ -592,8 +622,8 @@ jobRoutes.post('/real-search', async (c) => {
     let fitReasoning = null
     let status = 'new'
 
-    // Score only top 5 with Claude to save API calls
-    if (hasAI && i < 5) {
+    // Score top 10 with Claude for better relevance filtering
+    if (hasAI && i < 10) {
       try {
         const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
         fitScore = result.score
@@ -603,6 +633,9 @@ jobRoutes.post('/real-search', async (c) => {
         console.error(`Scoring failed for job ${job.title}: ${e.message}`)
       }
     }
+
+    // Skip low_fit jobs from AI scoring — only insert relevant results
+    if (status === 'low_fit') continue
 
     stmts.push(
       c.env.DB.prepare(
@@ -655,7 +688,7 @@ jobRoutes.post('/real-search', async (c) => {
     count: insertedJobs.length,
     scored: hasAI,
     sources,
-    message: `Found ${insertedJobs.length} jobs${sourceMsg} for "${keywords}"${hasAI ? ' (top 5 AI-scored)' : ''}!`,
+    message: `Found ${insertedJobs.length} relevant jobs${sourceMsg} for "${keywords}"${hasAI ? ' (AI-scored, low-fit filtered)' : ''}!`,
   })
 })
 
@@ -709,6 +742,13 @@ jobRoutes.get('/', async (c) => {
     bindings.push(postedAfter)
   }
 
+  const search = c.req.query('search')
+  if (search) {
+    query += ' AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)'
+    const term = `%${search.toLowerCase()}%`
+    bindings.push(term, term)
+  }
+
   // Sort order
   if (sort === 'oldest') {
     query += ' ORDER BY created_at ASC'
@@ -719,12 +759,18 @@ jobRoutes.get('/', async (c) => {
     query += ' ORDER BY created_at DESC'
   }
 
+  // Count total matching rows for pagination
+  const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as total')
+  const countResult = await c.env.DB.prepare(countQuery).bind(...bindings).first()
+  const total = countResult?.total ?? 0
+
   query += ' LIMIT ? OFFSET ?'
   bindings.push(limit, offset)
 
   const { results } = await c.env.DB.prepare(query).bind(...bindings).all()
 
   return c.json({
+    total,
     jobs: results.map(j => ({
       ...j,
       fit_reasoning: j.fit_reasoning ? JSON.parse(j.fit_reasoning) : null,

@@ -17,6 +17,7 @@ export async function fetchUserPreferences(db, userId) {
       )
     `).run()
     try { await db.prepare("ALTER TABLE user_preferences ADD COLUMN target_regions TEXT DEFAULT '[]'").run() } catch {}
+    try { await db.prepare("ALTER TABLE user_preferences ADD COLUMN disabled_sources TEXT DEFAULT '[]'").run() } catch {}
 
     const row = await db.prepare(
       'SELECT * FROM user_preferences WHERE user_id = ?'
@@ -30,6 +31,7 @@ export async function fetchUserPreferences(db, userId) {
         experience_level: null,
         languages: [],
         target_regions: [],
+        disabled_sources: [],
       }
     }
 
@@ -40,6 +42,7 @@ export async function fetchUserPreferences(db, userId) {
       experience_level: row.experience_level || null,
       languages: JSON.parse(row.languages || '[]'),
       target_regions: JSON.parse(row.target_regions || '[]'),
+      disabled_sources: JSON.parse(row.disabled_sources || '[]'),
     }
   } catch (e) {
     console.error('fetchUserPreferences error:', e.message)
@@ -50,6 +53,7 @@ export async function fetchUserPreferences(db, userId) {
       experience_level: null,
       languages: [],
       target_regions: [],
+      disabled_sources: [],
     }
   }
 }

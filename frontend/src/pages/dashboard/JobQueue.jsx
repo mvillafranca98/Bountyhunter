@@ -62,25 +62,32 @@ export default function JobQueue() {
   const [showSubscription, setShowSubscription] = useState(false)  // false = hide subscription jobs
   const [dateFilter, setDateFilter] = useState(null)  // null | '1d' | '7d' | '30d'
   const [postedAfterFilter, setPostedAfterFilter] = useState(null)  // null | '1d' | '7d' | '14d' | '30d'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 20
+  const [totalCount, setTotalCount] = useState(0)
   const [notes, setNotes] = useState([])
   const [timeline, setTimeline] = useState([])
   const [noteText, setNoteText] = useState('')
   const [notesLoading, setNotesLoading] = useState(false)
 
-  const load = async (status, sort, workType, subscription, createdAfter, postedAfter) => {
+  const load = async (status, sort, workType, subscription, createdAfter, postedAfter, search, currentPage) => {
     setLoading(true)
     try {
-      const params = { sort }
+      const params = { sort, limit: PAGE_SIZE, offset: (currentPage || 0) * PAGE_SIZE }
       if (status) params.status = status
       if (workType) params.work_type = workType
       if (subscription) params.subscription = 'include'
       if (createdAfter) params.created_after = createdAfter
       if (postedAfter) params.posted_after = postedAfter
+      if (search) params.search = search
       const [jobsRes, countsRes] = await Promise.all([
         jobsApi.list(params),
         jobsApi.counts(),
       ])
       setJobs(jobsRes.data.jobs)
+      setTotalCount(jobsRes.data.total ?? jobsRes.data.jobs.length)
       setCounts(countsRes.data.counts)
     } finally {
       setLoading(false)
@@ -100,8 +107,11 @@ export default function JobQueue() {
   }
 
   useEffect(() => {
-    load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
-  }, [activeStatus, sortBy, workTypeFilter, showSubscription, dateFilter, postedAfterFilter])
+    load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
+  }, [activeStatus, sortBy, workTypeFilter, showSubscription, dateFilter, postedAfterFilter, searchQuery, page])
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0) }, [activeStatus, sortBy, workTypeFilter, showSubscription, dateFilter, postedAfterFilter, searchQuery])
 
   // Load notes + timeline when a job is selected
   useEffect(() => {
@@ -139,7 +149,7 @@ export default function JobQueue() {
       const { data } = await jobsApi.prepare(job.id)
       toast.success('Resume tailored + cover letter ready!')
       setSelected({ ...job, prepared: data })
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Preparation failed')
     } finally {
@@ -153,7 +163,7 @@ export default function JobQueue() {
       await applicationsApi.apply(job.id, { method: 'manual' })
       toast.success('Marked as applied!')
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -173,7 +183,7 @@ export default function JobQueue() {
       })
       toast.success('Auto-apply queued!')
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -223,7 +233,7 @@ export default function JobQueue() {
     try {
       await jobsApi.flag(jobId)
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
     } catch { toast.error('Failed to flag job') }
   }
 
@@ -231,7 +241,7 @@ export default function JobQueue() {
     if (!window.confirm('Delete all flagged jobs?')) return
     try {
       await jobsApi.bulkDelete({ filter: 'flagged' })
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
     } catch { toast.error('Bulk delete failed') }
   }
 
@@ -240,7 +250,7 @@ export default function JobQueue() {
     try {
       const created_before = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
       await jobsApi.bulkDelete({ created_before })
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter), searchQuery, page)
     } catch { toast.error('Bulk delete failed') }
   }
 
@@ -262,6 +272,30 @@ export default function JobQueue() {
           </select>
         </div>
       </div>
+
+      {/* Search bar */}
+      <form
+        onSubmit={e => { e.preventDefault(); setSearchQuery(searchInput.trim()) }}
+        className="flex gap-2"
+      >
+        <input
+          type="text"
+          className="input flex-1"
+          placeholder="Search by job title or company…"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+        />
+        <button type="submit" className="btn-primary px-4">Search</button>
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => { setSearchInput(''); setSearchQuery('') }}
+            className="btn-ghost px-3 border border-surface-600 text-ink-muted"
+          >
+            Clear
+          </button>
+        )}
+      </form>
 
       {/* Status tabs */}
       <div className="flex gap-1 flex-wrap overflow-x-auto pb-1">
@@ -620,6 +654,31 @@ export default function JobQueue() {
           </div>
         ))}
       </div>
+
+      {/* Pagination */}
+      {(totalCount > PAGE_SIZE || page > 0) && (
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-ink-muted">
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, page * PAGE_SIZE + jobs.length)} of {totalCount}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="btn-ghost text-xs px-3 py-1.5 border border-surface-600 disabled:opacity-40"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={jobs.length < PAGE_SIZE}
+              className="btn-ghost text-xs px-3 py-1.5 border border-surface-600 disabled:opacity-40"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

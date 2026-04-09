@@ -44,6 +44,7 @@ export default function Profile() {
     experience_level: 'mid',
     languages: ['English'],
     target_regions: [],
+    disabled_sources: [],
   })
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [langInput, setLangInput] = useState('')
@@ -127,6 +128,15 @@ export default function Profile() {
       target_regions: (p.target_regions || []).includes(value)
         ? (p.target_regions || []).filter(r => r !== value)
         : [...(p.target_regions || []), value],
+    }))
+  }
+
+  const toggleSource = (value) => {
+    setPrefs(p => ({
+      ...p,
+      disabled_sources: (p.disabled_sources || []).includes(value)
+        ? (p.disabled_sources || []).filter(s => s !== value)
+        : [...(p.disabled_sources || []), value],
     }))
   }
 
@@ -378,6 +388,42 @@ export default function Profile() {
             >
               Add
             </button>
+          </div>
+        </div>
+
+        {/* Job Sources */}
+        <div>
+          <label className="label mb-1">Job sources</label>
+          <p className="text-xs text-ink-muted mb-2">Toggle sources off to stop pulling jobs from them</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: 'remotive',   label: 'Remotive' },
+              { value: 'arbeitnow',  label: 'Arbeitnow' },
+              { value: 'remoteok',   label: 'RemoteOK' },
+              { value: 'themuse',    label: 'The Muse' },
+              { value: 'jobicy',     label: 'Jobicy' },
+              { value: 'hackernews', label: 'HackerNews' },
+              { value: 'himalayas',  label: 'Himalayas' },
+            ].map(s => {
+              const disabled = (prefs.disabled_sources || []).includes(s.value)
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => toggleSource(s.value)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm border transition-colors ${
+                    disabled
+                      ? 'border-signal/30 bg-signal/10 text-ink-muted line-through'
+                      : 'border-surface-600 bg-surface-700 text-ink-secondary hover:border-cobalt/40'
+                  }`}
+                >
+                  <span>{s.label}</span>
+                  <span className={`text-xs font-medium ${disabled ? 'text-signal' : 'text-success'}`}>
+                    {disabled ? 'Off' : 'On'}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </div>
 

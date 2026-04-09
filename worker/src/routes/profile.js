@@ -105,6 +105,7 @@ profileRoutes.get('/preferences', async (c) => {
     )
   `).run()
   try { await c.env.DB.prepare("ALTER TABLE user_preferences ADD COLUMN target_regions TEXT DEFAULT '[]'").run() } catch {}
+  try { await c.env.DB.prepare("ALTER TABLE user_preferences ADD COLUMN disabled_sources TEXT DEFAULT '[]'").run() } catch {}
 
   const row = await c.env.DB.prepare(
     'SELECT * FROM user_preferences WHERE user_id = ?'
@@ -118,6 +119,7 @@ profileRoutes.get('/preferences', async (c) => {
       experience_level: 'mid',
       languages: ['English'],
       target_regions: [],
+      disabled_sources: [],
     })
   }
 
@@ -128,13 +130,14 @@ profileRoutes.get('/preferences', async (c) => {
     experience_level: row.experience_level,
     languages: JSON.parse(row.languages || '["English"]'),
     target_regions: JSON.parse(row.target_regions || '[]'),
+    disabled_sources: JSON.parse(row.disabled_sources || '[]'),
   })
 })
 
 // PUT /profile/preferences — save job search preferences
 profileRoutes.put('/preferences', async (c) => {
   const userId = c.get('userId')
-  const { work_style, deal_breakers, target_industries, experience_level, languages, target_regions } = await c.req.json()
+  const { work_style, deal_breakers, target_industries, experience_level, languages, target_regions, disabled_sources } = await c.req.json()
 
   // Ensure table exists
   await c.env.DB.prepare(`
@@ -146,14 +149,16 @@ profileRoutes.put('/preferences', async (c) => {
       experience_level TEXT DEFAULT 'mid',
       languages TEXT DEFAULT '["English"]',
       target_regions TEXT DEFAULT '[]',
+      disabled_sources TEXT DEFAULT '[]',
       updated_at TEXT DEFAULT (datetime('now'))
     )
   `).run()
   try { await c.env.DB.prepare("ALTER TABLE user_preferences ADD COLUMN target_regions TEXT DEFAULT '[]'").run() } catch {}
+  try { await c.env.DB.prepare("ALTER TABLE user_preferences ADD COLUMN disabled_sources TEXT DEFAULT '[]'").run() } catch {}
 
   await c.env.DB.prepare(
-    `INSERT INTO user_preferences (user_id, work_style, deal_breakers, target_industries, experience_level, languages, target_regions, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `INSERT INTO user_preferences (user_id, work_style, deal_breakers, target_industries, experience_level, languages, target_regions, disabled_sources, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(user_id) DO UPDATE SET
        work_style = COALESCE(?, work_style),
        deal_breakers = COALESCE(?, deal_breakers),
@@ -161,6 +166,7 @@ profileRoutes.put('/preferences', async (c) => {
        experience_level = COALESCE(?, experience_level),
        languages = COALESCE(?, languages),
        target_regions = COALESCE(?, target_regions),
+       disabled_sources = COALESCE(?, disabled_sources),
        updated_at = datetime('now')`
   ).bind(
     userId,
@@ -170,12 +176,14 @@ profileRoutes.put('/preferences', async (c) => {
     experience_level || 'mid',
     JSON.stringify(languages || ['English']),
     JSON.stringify(target_regions || []),
+    JSON.stringify(disabled_sources || []),
     work_style || null,
     deal_breakers ? JSON.stringify(deal_breakers) : null,
     target_industries ? JSON.stringify(target_industries) : null,
     experience_level || null,
     languages ? JSON.stringify(languages) : null,
     target_regions ? JSON.stringify(target_regions) : null,
+    disabled_sources ? JSON.stringify(disabled_sources) : null,
   ).run()
 
   return c.json({ success: true })

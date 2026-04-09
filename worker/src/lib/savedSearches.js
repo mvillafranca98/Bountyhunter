@@ -1,5 +1,5 @@
 export async function ensureSavedSearchesTable(db) {
-  await db.exec(`
+  await db.prepare(`
     CREATE TABLE IF NOT EXISTS saved_searches (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -10,5 +10,5 @@ export async function ensureSavedSearchesTable(db) {
       created_at TEXT DEFAULT (datetime('now')),
       UNIQUE(user_id, keywords)
     )
-  `)
+  `).run()
 }
