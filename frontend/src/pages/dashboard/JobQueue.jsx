@@ -61,12 +61,13 @@ export default function JobQueue() {
   const [workTypeFilter, setWorkTypeFilter] = useState(null)  // null | 'remote' | 'hybrid' | 'onsite'
   const [showSubscription, setShowSubscription] = useState(false)  // false = hide subscription jobs
   const [dateFilter, setDateFilter] = useState(null)  // null | '1d' | '7d' | '30d'
+  const [postedAfterFilter, setPostedAfterFilter] = useState(null)  // null | '1d' | '7d' | '14d' | '30d'
   const [notes, setNotes] = useState([])
   const [timeline, setTimeline] = useState([])
   const [noteText, setNoteText] = useState('')
   const [notesLoading, setNotesLoading] = useState(false)
 
-  const load = async (status, sort, workType, subscription, createdAfter) => {
+  const load = async (status, sort, workType, subscription, createdAfter, postedAfter) => {
     setLoading(true)
     try {
       const params = { sort }
@@ -74,6 +75,7 @@ export default function JobQueue() {
       if (workType) params.work_type = workType
       if (subscription) params.subscription = 'include'
       if (createdAfter) params.created_after = createdAfter
+      if (postedAfter) params.posted_after = postedAfter
       const [jobsRes, countsRes] = await Promise.all([
         jobsApi.list(params),
         jobsApi.counts(),
@@ -91,9 +93,15 @@ export default function JobQueue() {
     return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
   }
 
+  const getPostedAfterISO = (filter) => {
+    if (!filter) return null
+    const days = { '1d': 1, '7d': 7, '14d': 14, '30d': 30 }[filter] || 7
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  }
+
   useEffect(() => {
-    load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
-  }, [activeStatus, sortBy, workTypeFilter, showSubscription, dateFilter])
+    load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
+  }, [activeStatus, sortBy, workTypeFilter, showSubscription, dateFilter, postedAfterFilter])
 
   // Load notes + timeline when a job is selected
   useEffect(() => {
@@ -131,7 +139,7 @@ export default function JobQueue() {
       const { data } = await jobsApi.prepare(job.id)
       toast.success('Resume tailored + cover letter ready!')
       setSelected({ ...job, prepared: data })
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Preparation failed')
     } finally {
@@ -145,7 +153,7 @@ export default function JobQueue() {
       await applicationsApi.apply(job.id, { method: 'manual' })
       toast.success('Marked as applied!')
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -165,7 +173,7 @@ export default function JobQueue() {
       })
       toast.success('Auto-apply queued!')
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed')
     } finally {
@@ -196,12 +204,26 @@ export default function JobQueue() {
     }
   }
 
+  const downloadCoverLetter = (jobId, title, company) => {
+    const text = selected?.prepared?.cover_letter
+    if (!text) return
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `CoverLetter_${company || 'Company'}_${title || 'Role'}.txt`.replace(/[^a-zA-Z0-9_.-]/g, '_')
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const flagJob = async (jobId, e) => {
     e.stopPropagation()
     try {
       await jobsApi.flag(jobId)
       setSelected(null)
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
     } catch { toast.error('Failed to flag job') }
   }
 
@@ -209,7 +231,7 @@ export default function JobQueue() {
     if (!window.confirm('Delete all flagged jobs?')) return
     try {
       await jobsApi.bulkDelete({ filter: 'flagged' })
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
     } catch { toast.error('Bulk delete failed') }
   }
 
@@ -218,7 +240,7 @@ export default function JobQueue() {
     try {
       const created_before = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
       await jobsApi.bulkDelete({ created_before })
-      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter))
+      load(activeStatus, sortBy, workTypeFilter, showSubscription, getCreatedAfterISO(dateFilter), getPostedAfterISO(postedAfterFilter))
     } catch { toast.error('Bulk delete failed') }
   }
 
@@ -312,6 +334,30 @@ export default function JobQueue() {
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               dateFilter === key
                 ? 'bg-cobalt text-white'
+                : 'bg-surface-700 text-ink-muted hover:text-ink-primary'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Posted within filter pills */}
+      <div className="flex items-center gap-1.5">
+        <span className="section-label mr-1">Posted within</span>
+        {[
+          { key: null,   label: 'Any time' },
+          { key: '1d',   label: 'Today' },
+          { key: '7d',   label: '7 days' },
+          { key: '14d',  label: '14 days' },
+          { key: '30d',  label: '30 days' },
+        ].map(({ key, label }) => (
+          <button
+            key={String(key)}
+            onClick={() => setPostedAfterFilter(key)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              postedAfterFilter === key
+                ? 'bg-violet text-white'
                 : 'bg-surface-700 text-ink-muted hover:text-ink-primary'
             }`}
           >
@@ -467,7 +513,15 @@ export default function JobQueue() {
                     </div>
                     {selected.prepared.cover_letter && (
                       <div className="bg-surface-900 rounded-lg p-3">
-                        <p className="section-label mb-2">Cover Letter</p>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="section-label">Cover Letter</p>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); downloadCoverLetter(job.id, job.title, job.company) }}
+                            className="btn-ghost text-xs flex items-center gap-1"
+                          >
+                            Download .txt
+                          </button>
+                        </div>
                         <p className="text-xs text-ink-secondary whitespace-pre-wrap max-h-40 overflow-y-auto">
                           {selected.prepared.cover_letter}
                         </p>

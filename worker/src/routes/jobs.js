@@ -91,7 +91,7 @@ jobRoutes.post('/seed', async (c) => {
       gaps: job.fit_gaps || [],
       reasoning: job.fit_reasoning || '',
     }
-    const status = (job.fit_score || 0) >= 75 ? 'scored' : 'low_fit'
+    const status = (job.fit_score || 0) >= 60 ? 'scored' : 'low_fit'
     stmts.push(
       c.env.DB.prepare(
         `INSERT INTO jobs
@@ -598,7 +598,7 @@ jobRoutes.post('/real-search', async (c) => {
         const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
         fitScore = result.score
         fitReasoning = JSON.stringify(result)
-        status = result.score >= 75 ? 'scored' : 'low_fit'
+        status = result.score >= 60 ? 'scored' : 'low_fit'
       } catch (e) {
         console.error(`Scoring failed for job ${job.title}: ${e.message}`)
       }
@@ -701,6 +701,12 @@ jobRoutes.get('/', async (c) => {
   if (createdAfter) {
     query += ' AND created_at >= ?'
     bindings.push(createdAfter)
+  }
+
+  const postedAfter = c.req.query('posted_after')
+  if (postedAfter) {
+    query += ' AND posted_at >= ?'
+    bindings.push(postedAfter)
   }
 
   // Sort order
@@ -958,7 +964,7 @@ ${textContent}`
     const result = await scoreJobFit(anthropicKey, jobData.description || textContent.slice(0, 4000), parsedResume, userPrefs, jobSearchPrefs)
     fitScore = result.score
     fitReasoning = JSON.stringify(result)
-    status = result.score >= 75 ? 'scored' : 'low_fit'
+    status = result.score >= 60 ? 'scored' : 'low_fit'
   } catch (e) {
     console.error('Scoring failed:', e.message)
     // Continue without scoring

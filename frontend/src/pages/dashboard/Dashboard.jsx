@@ -130,10 +130,12 @@ export default function Dashboard() {
   const [alertKeywords, setAlertKeywords] = useState('')
   const [creatingAlert, setCreatingAlert] = useState(false)
   const [searchResults, setSearchResults] = useState([])
+  const [recentJobs, setRecentJobs] = useState([])
 
   useEffect(() => {
     dashboardApi.summary().then(r => setData(r.data)).catch(() => {})
     loadAlerts()
+    jobsApi.list({ sort: 'newest', limit: 10 }).then(r => setRecentJobs(r.data.jobs || [])).catch(() => {})
   }, [])
 
   const loadAlerts = () => {
@@ -186,7 +188,14 @@ export default function Dashboard() {
       setSearchResults(filterAndSliceResults(jobs))
       dashboardApi.summary().then(res => setData(res.data)).catch(() => {})
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Search failed')
+      const isTimeout = err.code === 'ECONNABORTED' || (err.message || '').includes('timeout')
+      if (isTimeout) {
+        toast.warn('Search is taking longer than expected — check your Job Queue for new results', { autoClose: 6000 })
+        dashboardApi.summary().then(res => setData(res.data)).catch(() => {})
+        jobsApi.list({ sort: 'newest', limit: 10 }).then(r => setRecentJobs(r.data.jobs || [])).catch(() => {})
+      } else {
+        toast.error(err.response?.data?.error || 'Search failed')
+      }
     } finally {
       setSearching(false)
     }
@@ -220,7 +229,14 @@ export default function Dashboard() {
       setSearchResults(filterAndSliceResults(jobs))
       dashboardApi.summary().then(res => setData(res.data)).catch(() => {})
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to find real jobs')
+      const isTimeout = err.code === 'ECONNABORTED' || (err.message || '').includes('timeout')
+      if (isTimeout) {
+        toast.warn('Search is taking longer than expected — check your Job Queue for new results', { autoClose: 6000 })
+        dashboardApi.summary().then(res => setData(res.data)).catch(() => {})
+        jobsApi.list({ sort: 'newest', limit: 10 }).then(r => setRecentJobs(r.data.jobs || [])).catch(() => {})
+      } else {
+        toast.error(err.response?.data?.error || 'Failed to find real jobs')
+      }
     } finally {
       setFindingReal(false)
     }
@@ -344,6 +360,37 @@ export default function Dashboard() {
         <StatCard label="Needs you" value={counts.needs_manual || 0} color="text-warning" />
         <StatCard label="Expired / gone" value={counts.expired || 0} color="text-ink-muted" />
       </div>
+
+      {/* Recently Added */}
+      {recentJobs.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-display font-semibold text-ink-primary">Recently added</h2>
+            <Link to="/dashboard/jobs" className="text-xs text-cobalt-light hover:underline">View all →</Link>
+          </div>
+          <div className="space-y-2">
+            {recentJobs.map(job => (
+              <Link
+                key={job.id}
+                to={`/dashboard/jobs?highlight=${job.id}`}
+                className="card-hover flex items-center gap-3 hover:border-cobalt/40 transition-all"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-ink-primary text-sm truncate">{job.title}</p>
+                  <p className="text-xs text-ink-muted truncate">
+                    {job.company}{job.location ? ` · ${job.location}` : ''}
+                    {job.source && <span className="ml-1">({job.source})</span>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <FitPill score={job.fit_score} />
+                  <span className="text-xs text-ink-muted">{new Date(job.created_at).toLocaleDateString()}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Import job by URL */}
       <div className="flex gap-3">

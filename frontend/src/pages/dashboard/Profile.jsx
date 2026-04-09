@@ -34,7 +34,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [autoApply, setAutoApply] = useState(false)
-  const [fitThreshold, setFitThreshold] = useState(75)
+  const [fitThreshold, setFitThreshold] = useState(60)
 
   // Job search preferences state
   const [prefs, setPrefs] = useState({
@@ -43,6 +43,7 @@ export default function Profile() {
     target_industries: [],
     experience_level: 'mid',
     languages: ['English'],
+    target_regions: [],
   })
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [langInput, setLangInput] = useState('')
@@ -54,7 +55,7 @@ export default function Profile() {
     ]).then(([profileRes, prefsRes]) => {
       setProfile(profileRes.data)
       setAutoApply(!!profileRes.data.user?.auto_apply)
-      setFitThreshold(profileRes.data.user?.fit_threshold || 75)
+      setFitThreshold(profileRes.data.user?.fit_threshold || 60)
       setPrefs(prefsRes.data)
     }).finally(() => setLoading(false))
   }, [])
@@ -118,6 +119,15 @@ export default function Profile() {
 
   const removeLanguage = (lang) => {
     setPrefs(p => ({ ...p, languages: p.languages.filter(l => l !== lang) }))
+  }
+
+  const toggleRegion = (value) => {
+    setPrefs(p => ({
+      ...p,
+      target_regions: (p.target_regions || []).includes(value)
+        ? (p.target_regions || []).filter(r => r !== value)
+        : [...(p.target_regions || []), value],
+    }))
   }
 
   if (loading) return <div className="text-ink-muted text-sm text-center py-16">Loading...</div>
@@ -303,6 +313,36 @@ export default function Profile() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Target Regions */}
+        <div>
+          <label className="label mb-2">Target regions <span className="text-ink-muted font-normal text-xs">(to avoid timezone/language issues)</span></label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'americas',        label: '🌎 Americas' },
+              { value: 'europe',          label: '🌍 Europe' },
+              { value: 'asia_pacific',    label: '🌏 Asia-Pacific' },
+              { value: 'africa_me',       label: '🌍 Africa / Middle East' },
+              { value: 'remote_any',      label: '🌐 Remote (any region)' },
+            ].map(r => (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => toggleRegion(r.value)}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                  (prefs.target_regions || []).includes(r.value)
+                    ? 'bg-cobalt text-white'
+                    : 'bg-surface-700 text-ink-muted hover:bg-surface-600 hover:text-ink-secondary'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          {(prefs.target_regions || []).length === 0 && (
+            <p className="text-xs text-ink-muted mt-1.5">No filter — all regions shown</p>
+          )}
         </div>
 
         {/* Languages */}

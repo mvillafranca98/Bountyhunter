@@ -86,8 +86,9 @@ Parsed Resume Data: ${JSON.stringify(parsedData, null, 2)}
 HARVARD FORMAT RULES — follow exactly:
 
 1. HEADER (top of resume):
-   # First Last
-   email@example.com · (555) 555-5555 · City, State · linkedin.com/in/handle
+   # [candidate's full name]
+   [MUST USE THIS EXACT EMAIL: ${userProfile.email}] · [phone from parsed data] · [location from parsed data or userProfile.location]
+   IMPORTANT: The email in the header MUST be exactly: ${userProfile.email} — ignore any other email in the parsed resume
 
 2. SECTIONS in this order (use ## for section headers):
    ## Experience
@@ -114,6 +115,7 @@ HARVARD FORMAT RULES — follow exactly:
    **Tools:** AWS, Docker, Kubernetes, Git
 
 STRICT RULES:
+- EMAIL: The header MUST show ${userProfile.email} exactly — this is the user's account email, not any email from their old resume
 - Use ONLY information from the provided parsed data — do NOT fabricate experience, dates, or companies
 - No tables, no columns, no special symbols (ATS-safe plain markdown only)
 - Keep total content to 1–2 pages equivalent
@@ -219,6 +221,9 @@ Job Search Preferences:
 - Deal-breakers: ${prefs.deal_breakers?.length ? prefs.deal_breakers.join(', ') : 'none'}
 - Target industries: ${prefs.target_industries?.length ? prefs.target_industries.join(', ') : 'any'}
 - Languages: ${prefs.languages?.length ? prefs.languages.join(', ') : 'not specified'}
+- Target regions: ${prefs.target_regions?.length ? prefs.target_regions.join(', ') : 'no preference'}
+
+NOTE: If target_regions is set, factor regional fit into location_fit score. A job in a non-preferred region should score 3-5 on location_fit (not 0 unless truly incompatible). Remote jobs with 'remote_any' region preference always score 10.
 
 Be honest. 90+ means near-perfect. Detect work_type from the job description text.`
 
