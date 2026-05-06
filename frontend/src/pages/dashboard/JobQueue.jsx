@@ -572,6 +572,29 @@ export default function JobQueue() {
                   </div>
                 )}
 
+                {/* Job description preview */}
+                {job.description && (
+                  <div className="bg-surface-900 rounded-lg p-3 space-y-2">
+                    <p className="section-label">Job Description</p>
+                    <p className="text-sm text-ink-secondary whitespace-pre-line leading-relaxed">
+                      {job.description.length > 600
+                        ? job.description.slice(0, 600).replace(/\s\S*$/, '') + '…'
+                        : job.description}
+                    </p>
+                    {job.description.length > 600 && (
+                      <a href={job.url} target="_blank" rel="noreferrer" className="text-xs text-cobalt hover:underline">
+                        Read full description ↗
+                      </a>
+                    )}
+                  </div>
+                )}
+                {!job.description && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2.5 flex items-start gap-2">
+                    <span className="text-base leading-none mt-0.5">⚠️</span>
+                    <p className="text-xs text-amber-300">No description available for this job. View the original posting for details.</p>
+                  </div>
+                )}
+
                 {/* Fit reasoning */}
                 {job.fit_reasoning && (
                   <div className="bg-surface-900 rounded-lg p-3 space-y-2">
@@ -684,9 +707,15 @@ export default function JobQueue() {
 
                 {/* Actions */}
                 <div className="flex gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
-                  <a href={job.url} target="_blank" rel="noreferrer" className="btn-ghost text-xs">
-                    View posting ↗
-                  </a>
+                  {job.url && /^https?:\/\//.test(job.url) ? (
+                    <a href={job.url} target="_blank" rel="noreferrer" className="btn-ghost text-xs">
+                      View posting ↗
+                    </a>
+                  ) : (
+                    <span className="btn-ghost text-xs opacity-40 cursor-not-allowed" title="No valid URL">
+                      View posting ↗
+                    </span>
+                  )}
                   {!['applied', 'needs_manual', 'expired'].includes(job.status) && (
                     <>
                       {!selected.prepared && (
@@ -751,4 +780,5 @@ export default function JobQueue() {
     </div>
   )
 }
+
 

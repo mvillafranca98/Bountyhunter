@@ -488,6 +488,10 @@ function isValidJob(job) {
   if (!company || company.length < 2) return false
   if (/https?:\/\//.test(company)) return false
 
+  // Description must have meaningful content (50+ chars after stripping whitespace)
+  const desc = (job.description || '').trim()
+  if (desc.length < 50) return false
+
   return true
 }
 
@@ -602,8 +606,14 @@ jobRoutes.post('/real-search', async (c) => {
 
   // Fetch job search preferences for enhanced scoring
   let jobSearchPrefs = null
+  let fitThreshold = 60  // default
   if (hasAI) {
     jobSearchPrefs = await fetchUserPreferences(c.env.DB, userId)
+    // Use the user's configured fit_threshold if set
+    const userRow = await c.env.DB.prepare(
+      'SELECT fit_threshold FROM users WHERE id = ?'
+    ).bind(userId).first().catch(() => null)
+    if (userRow?.fit_threshold != null) fitThreshold = userRow.fit_threshold
   }
 
   // Pre-filter by work type if user has a strict remote preference
@@ -661,12 +671,13 @@ jobRoutes.post('/real-search', async (c) => {
     let status = 'new'
 
     // Score top 5 with Claude to stay within timeout window
-    if (hasAI && i < 5) {
+    // SKIP scoring for jobs without meaningful descriptions — title alone produces garbage scores
+    if (hasAI && i < 5 && job.description && job.description.trim().length >= 50) {
       try {
-        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
+        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description, parsedResume, userPrefs, jobSearchPrefs)
         fitScore = result.score
         fitReasoning = JSON.stringify(result)
-        status = result.score >= 60 ? 'scored' : 'low_fit'
+        status = result.score >= fitThreshold ? 'scored' : 'low_fit'
       } catch (e) {
         console.error(`Scoring failed for job ${job.title}: ${e.message}`)
       }
@@ -1271,5 +1282,6 @@ jobRoutes.put('/:id/status', async (c) => {
 
   return c.json({ success: true })
 })
+
 
 
