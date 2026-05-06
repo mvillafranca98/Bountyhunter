@@ -165,9 +165,41 @@ async function handleScoreJob({ userId, jobId }, env) {
 
   const jobSearchPrefs = await fetchUserPreferences(env.DB, userId)
 
-  const result = await scoreJobFit(env.ANTHROPIC_API_KEY, job.description || job.title, parsedResume, userPrefs, jobSearchPrefs)
+  // Skip Claude scoring if job has no meaningful description
+  if (!job.description || job.description.trim().length < 50) {
+    const noDescResult = {
+      score: 0,
+      verdict: 'weak_fit',
+      reasoning: 'No meaningful job description available — cannot assess fit accurately.',
+      highlights: [],
+      gaps: ['No job description to analyze'],
+      deal_breakers: [],
+      salary_match: null,
+      dimensions: null,
+      work_type_detected: 'unknown',
+    }
+    await env.DB.prepare(
+      `UPDATE jobs SET fit_score = 0, fit_reasoning = ?, status = 'low_fit', updated_at = datetime('now') WHERE id = ?`
+    ).bind(JSON.stringify(noDescResult), jobId).run()
+    return
+  }
 
-  const status = result.score >= 75 ? 'scored' : 'low_fit'
+  // Feedback loop: load starred/applied jobs as reference signals
+  const { results: refs } = await env.DB.prepare(
+    `SELECT title, company, fit_score FROM jobs
+     WHERE user_id = ? AND status IN ('ready', 'applied')
+     ORDER BY fit_score DESC LIMIT 10`
+  ).bind(userId).all().catch(() => ({ results: [] }))
+
+  // Use user's configured fit_threshold
+  const userRow = await env.DB.prepare(
+    'SELECT fit_threshold FROM users WHERE id = ?'
+  ).bind(userId).first().catch(() => null)
+  const fitThreshold = userRow?.fit_threshold ?? 60
+
+  const result = await scoreJobFit(env.ANTHROPIC_API_KEY, job.description, parsedResume, userPrefs, jobSearchPrefs, refs || [])
+
+  const status = result.score >= fitThreshold ? 'scored' : 'low_fit'
 
   await env.DB.prepare(
     `UPDATE jobs SET fit_score = ?, fit_reasoning = ?, status = ?, updated_at = datetime('now')
@@ -312,3 +344,4 @@ async function handleScanCompany({ userId, companyId }, env) {
     "UPDATE company_watchlist SET last_scanned_at = datetime('now') WHERE id = ?"
   ).bind(companyId).run()
 }
+

@@ -607,6 +607,7 @@ jobRoutes.post('/real-search', async (c) => {
   // Fetch job search preferences for enhanced scoring
   let jobSearchPrefs = null
   let fitThreshold = 60  // default
+  let referenceJobs = []
   if (hasAI) {
     jobSearchPrefs = await fetchUserPreferences(c.env.DB, userId)
     // Use the user's configured fit_threshold if set
@@ -614,6 +615,14 @@ jobRoutes.post('/real-search', async (c) => {
       'SELECT fit_threshold FROM users WHERE id = ?'
     ).bind(userId).first().catch(() => null)
     if (userRow?.fit_threshold != null) fitThreshold = userRow.fit_threshold
+
+    // Feedback loop: load starred (ready) and applied jobs as reference signals
+    const { results: refs } = await c.env.DB.prepare(
+      `SELECT title, company, fit_score FROM jobs
+       WHERE user_id = ? AND status IN ('ready', 'applied')
+       ORDER BY fit_score DESC LIMIT 10`
+    ).bind(userId).all().catch(() => ({ results: [] }))
+    referenceJobs = refs || []
   }
 
   // Pre-filter by work type if user has a strict remote preference
@@ -674,7 +683,7 @@ jobRoutes.post('/real-search', async (c) => {
     // SKIP scoring for jobs without meaningful descriptions — title alone produces garbage scores
     if (hasAI && i < 5 && job.description && job.description.trim().length >= 50) {
       try {
-        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description, parsedResume, userPrefs, jobSearchPrefs)
+        const result = await scoreJobFit(c.env.ANTHROPIC_API_KEY, job.description, parsedResume, userPrefs, jobSearchPrefs, referenceJobs)
         fitScore = result.score
         fitReasoning = JSON.stringify(result)
         status = result.score >= fitThreshold ? 'scored' : 'low_fit'
@@ -1056,10 +1065,23 @@ ${textContent}`
 
     const jobSearchPrefs = await fetchUserPreferences(c.env.DB, userId)
 
-    const result = await scoreJobFit(anthropicKey, jobData.description || textContent.slice(0, 4000), parsedResume, userPrefs, jobSearchPrefs)
+    // Feedback loop: load reference jobs for personalized scoring
+    const { results: importRefs } = await c.env.DB.prepare(
+      `SELECT title, company, fit_score FROM jobs
+       WHERE user_id = ? AND status IN ('ready', 'applied')
+       ORDER BY fit_score DESC LIMIT 10`
+    ).bind(userId).all().catch(() => ({ results: [] }))
+
+    // Use user's fit_threshold
+    const userRow2 = await c.env.DB.prepare(
+      'SELECT fit_threshold FROM users WHERE id = ?'
+    ).bind(userId).first().catch(() => null)
+    const importThreshold = userRow2?.fit_threshold ?? 60
+
+    const result = await scoreJobFit(anthropicKey, jobData.description || textContent.slice(0, 4000), parsedResume, userPrefs, jobSearchPrefs, importRefs || [])
     fitScore = result.score
     fitReasoning = JSON.stringify(result)
-    status = result.score >= 60 ? 'scored' : 'low_fit'
+    status = result.score >= importThreshold ? 'scored' : 'low_fit'
   } catch (e) {
     console.error('Scoring failed:', e.message)
     // Continue without scoring

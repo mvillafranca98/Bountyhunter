@@ -146,9 +146,11 @@ Experience bullets should be achievement-focused (not just responsibilities).`
   return parseJSON(result)
 }
 
-// ─── Job Fit Scoring (10-dimension) ───────────────────────────────────────────
-export async function scoreJobFit(apiKey, jobDescription, parsedResume, userPrefs, jobSearchPrefs) {
+// ─── Job Fit Scoring (10-dimension + reference job learning) ─────────────────
+// referenceJobs: array of { title, company, fit_score } from user's starred/applied jobs
+export async function scoreJobFit(apiKey, jobDescription, parsedResume, userPrefs, jobSearchPrefs, referenceJobs) {
   const prefs = jobSearchPrefs || {}
+  const refs = referenceJobs || []
 
   const system = `You are an expert job-fit analyst. Score how well this candidate matches a job posting across 10 dimensions.
 Return ONLY valid JSON — no markdown, no explanation:
@@ -165,7 +167,8 @@ Return ONLY valid JSON — no markdown, no explanation:
     "employment_type":    number (0-10),
     "growth_potential":   number (0-10),
     "culture_signals":    number (0-10),
-    "deal_breaker_check": number (0-10, 0 if any deal-breaker triggered)
+    "deal_breaker_check": number (0-10, 0 if any deal-breaker triggered),
+    "preference_signal":  number (0-10)
   },
   "work_type_detected": "remote | hybrid | onsite | unknown",
   "highlights": ["string — specific skills/experiences that match"],
@@ -175,7 +178,10 @@ Return ONLY valid JSON — no markdown, no explanation:
   "reasoning": "string (2-3 sentences explaining the overall score)"
 }
 
-OVERALL SCORE: Weighted average — skills_match (25%), experience_level (20%), industry_relevance (10%), work_type_fit (10%), salary_alignment (10%), location_fit (5%), employment_type (5%), growth_potential (5%), culture_signals (5%), deal_breaker_check (5%).
+OVERALL SCORE: Weighted average:
+${refs.length > 0
+  ? '- skills_match (20%), experience_level (15%), preference_signal (15%), industry_relevance (10%), work_type_fit (10%), salary_alignment (10%), location_fit (5%), employment_type (5%), growth_potential (5%), culture_signals (3%), deal_breaker_check (2%).'
+  : '- skills_match (25%), experience_level (20%), industry_relevance (10%), work_type_fit (10%), salary_alignment (10%), location_fit (5%), employment_type (5%), growth_potential (5%), culture_signals (5%), deal_breaker_check (5%). preference_signal: set to 5 (neutral — no reference data).'}
 
 DIMENSION RUBRICS:
 - skills_match: 9-10=exact stack match, 7-8=mostly matches with minor gaps, 5-6=50% overlap, 3-4=adjacent skills only, 0-2=wrong field
@@ -188,6 +194,7 @@ DIMENSION RUBRICS:
 - growth_potential: does this role offer career progression relative to candidate's current level?
 - culture_signals: infer from job description — team size, values, autonomy, startup vs enterprise
 - deal_breaker_check: 0 if any hard deal-breaker triggered, 10 if none
+- preference_signal: how similar is this job to the Reference Jobs the user has previously starred/applied to? 9-10=very similar role/industry/company type, 7-8=related field, 5-6=some overlap, 3-4=loosely related, 0-2=completely different direction
 
 DEAL-BREAKERS (set deal_breaker_check=0 and cap overall score at 30 if any):
 - Job requires on-site and candidate is remote-only AND in different city/country
@@ -201,7 +208,16 @@ WORK_TYPE DETECTION: Read the job description and location carefully:
 - "On-site", "in-office", "in-person required", specific city with no remote mention → onsite
 - Can't determine → unknown`
 
-  const prompt = `Score this candidate for the job across 10 dimensions.
+  // Build reference jobs section
+  let referenceSection = ''
+  if (refs.length > 0) {
+    referenceSection = `\n\nReference Jobs (previously starred/applied by this user — use these to gauge preferences):
+${refs.map((r, i) => `${i + 1}. "${r.title}" at ${r.company} (score: ${r.fit_score ?? 'unscored'})`).join('\n')}
+
+Use these reference jobs to calibrate the preference_signal dimension. Jobs similar in role type, industry, company stage, or skill requirements to these references should score higher on preference_signal.`
+  }
+
+  const prompt = `Score this candidate for the job across ${refs.length > 0 ? '11' : '10'} dimensions.
 
 Job Description:
 ${jobDescription}
@@ -222,6 +238,7 @@ Job Search Preferences:
 - Target industries: ${prefs.target_industries?.length ? prefs.target_industries.join(', ') : 'any'}
 - Languages: ${prefs.languages?.length ? prefs.languages.join(', ') : 'not specified'}
 - Target regions: ${prefs.target_regions?.length ? prefs.target_regions.join(', ') : 'no preference'}
+${referenceSection}
 
 NOTE: If target_regions is set, factor regional fit into location_fit score. A job in a non-preferred region should score 3-5 on location_fit (not 0 unless truly incompatible). Remote jobs with 'remote_any' region preference always score 10.
 
@@ -422,3 +439,4 @@ Requirements:
   const result = await callClaude(apiKey, system, prompt, 4096)
   return parseJSON(result)
 }
+
