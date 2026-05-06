@@ -5,6 +5,28 @@ import { scoreJobFit, tailorResume, generateCoverLetter, generateSampleJobs } fr
 import { fetchUserPreferences } from '../lib/preferences.js'
 import { markdownToOOXML, buildDocx } from '../lib/docx.js'
 
+// ─── Cosine Similarity (pure JS, no deps) ─────────────────────────────────────
+function cosineSimilarity(a, b) {
+  let dot = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+function averageVectors(vectors) {
+  if (!vectors.length) return null
+  const len = vectors[0].length
+  const avg = new Array(len).fill(0)
+  for (const v of vectors) {
+    for (let i = 0; i < len; i++) avg[i] += v[i]
+  }
+  for (let i = 0; i < len; i++) avg[i] /= vectors.length
+  return avg
+}
+
 export const jobRoutes = new Hono()
 jobRoutes.use('*', requireAuth)
 
@@ -665,6 +687,72 @@ jobRoutes.post('/real-search', async (c) => {
 
   if (!allJobs.length) {
     return c.json({ jobs: [], sources, message: `No jobs found for "${keywords}"` })
+  }
+
+  // ─── Embedding pre-filter (Cloudflare Workers AI) ──────────────────────────
+  // Compute semantic similarity against resume + preference vector.
+  // Jobs below threshold are skipped entirely (no Claude API call needed).
+  if (c.env.AI && hasAI && Object.keys(parsedResume).length > 0) {
+    try {
+      // Build resume text for embedding
+      const resumeText = [
+        parsedResume.summary || '',
+        (parsedResume.skills || []).join(' '),
+        (parsedResume.experience || []).map(e => `${e.title} ${e.description || ''}`).join(' '),
+      ].join(' ').slice(0, 1500)
+
+      // Gather texts to embed: resume + all job descriptions
+      const jobTexts = allJobs.map(j => (j.description || j.title || '').slice(0, 1500))
+      const textsToEmbed = [resumeText, ...jobTexts]
+
+      // Build preference vector from starred/applied job descriptions (if any)
+      let prefTexts = []
+      if (referenceJobs.length > 0) {
+        const refIds = referenceJobs.map(r => r.title) // we only have title/company from the lightweight query
+        // Load full descriptions for reference jobs
+        const { results: refJobs } = await c.env.DB.prepare(
+          `SELECT description FROM jobs WHERE user_id = ? AND status IN ('ready', 'applied') AND description IS NOT NULL ORDER BY fit_score DESC LIMIT 5`
+        ).bind(userId).all().catch(() => ({ results: [] }))
+        prefTexts = (refJobs || []).map(r => (r.description || '').slice(0, 1500)).filter(t => t.length > 50)
+      }
+      if (prefTexts.length > 0) {
+        textsToEmbed.push(...prefTexts)
+      }
+
+      const embedResult = await c.env.AI.run('@cf/baai/bge-small-en-v1.5', {
+        text: textsToEmbed,
+      })
+
+      const vectors = embedResult.data
+      const resumeVec = vectors[0]
+      const jobVecs = vectors.slice(1, 1 + allJobs.length)
+
+      // Build preference vector (average of starred/applied job embeddings)
+      let prefVec = null
+      if (prefTexts.length > 0) {
+        const prefVecs = vectors.slice(1 + allJobs.length)
+        prefVec = averageVectors(prefVecs)
+      }
+
+      // Score each job by combined similarity (resume + preference)
+      allJobs = allJobs.map((job, idx) => {
+        const resumeSim = cosineSimilarity(resumeVec, jobVecs[idx])
+        const prefSim = prefVec ? cosineSimilarity(prefVec, jobVecs[idx]) : 0
+        // Weighted: 60% resume similarity, 40% preference similarity (if available)
+        const combinedSim = prefVec ? (resumeSim * 0.6 + prefSim * 0.4) : resumeSim
+        return { ...job, _embeddingSim: combinedSim }
+      })
+        .filter(job => job._embeddingSim >= 0.25) // drop obvious mismatches
+        .sort((a, b) => b._embeddingSim - a._embeddingSim)
+
+      console.log(`Embedding pre-filter: ${allJobs.length} jobs passed (threshold 0.25)`)
+    } catch (e) {
+      console.warn('Embedding pre-filter failed, continuing without:', e.message)
+    }
+  }
+
+  if (!allJobs.length) {
+    return c.json({ jobs: [], sources, message: `No semantically relevant jobs found for "${keywords}"` })
   }
 
   // Insert into D1 and optionally score top 5
