@@ -689,9 +689,41 @@ jobRoutes.post('/real-search', async (c) => {
     return c.json({ jobs: [], sources, message: `No jobs found for "${keywords}"` })
   }
 
+  // ─── Language filter ────────────────────────────────────────────────────────
+  // Drop jobs whose description is in a language the user doesn't speak.
+  const userLangs = (jobSearchPrefs?.languages || []).map(l => l.toLowerCase())
+  if (userLangs.length > 0) {
+    const beforeLang = allJobs.length
+    allJobs = allJobs.filter(job => {
+      const desc = (job.description || '').slice(0, 500)
+      // Detect non-English/Spanish content (common European language markers)
+      const germanWords = /\b(und|oder|für|mit|auf|werden|Ihre|wir|suchen|Erfahrung|Aufgaben|Anforderungen|Stelle|Bewerbung|Unternehmen)\b/i
+      const frenchWords = /\b(nous|vous|pour|avec|dans|sont|être|avoir|recherchons|expérience|poste|entreprise|équipe)\b/i
+      const portugueseWords = /\b(para|como|seus|nossa|você|trabalho|empresa|experiência|requisitos|vaga)\b/i
+      const dutchWords = /\b(voor|met|onze|bent|zoeken|ervaring|functie|sollicitatie|bedrijf|werken)\b/i
+
+      // Count matches to avoid false positives on individual words
+      const germanHits = (desc.match(germanWords) || []).length
+      const frenchHits = (desc.match(frenchWords) || []).length
+      const ptHits = (desc.match(portugueseWords) || []).length
+      const dutchHits = (desc.match(dutchWords) || []).length
+
+      // If 3+ marker words from a non-spoken language, filter it out
+      if (germanHits >= 2 && !userLangs.some(l => l.includes('german') || l.includes('deutsch'))) return false
+      if (frenchHits >= 2 && !userLangs.some(l => l.includes('french') || l.includes('français'))) return false
+      if (ptHits >= 2 && !userLangs.some(l => l.includes('portuguese') || l.includes('português'))) return false
+      if (dutchHits >= 2 && !userLangs.some(l => l.includes('dutch') || l.includes('nederlands'))) return false
+      return true
+    })
+    if (allJobs.length < beforeLang) {
+      console.log(`Language filter: removed ${beforeLang - allJobs.length} non-matching language jobs`)
+    }
+  }
+
   // ─── Embedding pre-filter (Cloudflare Workers AI) ──────────────────────────
   // Compute semantic similarity against resume + preference vector.
   // Jobs below threshold are skipped entirely (no Claude API call needed).
+  const EMBEDDING_THRESHOLD = 0.40
   if (c.env.AI && hasAI && Object.keys(parsedResume).length > 0) {
     try {
       // Build resume text for embedding
@@ -708,7 +740,6 @@ jobRoutes.post('/real-search', async (c) => {
       // Build preference vector from starred/applied job descriptions (if any)
       let prefTexts = []
       if (referenceJobs.length > 0) {
-        const refIds = referenceJobs.map(r => r.title) // we only have title/company from the lightweight query
         // Load full descriptions for reference jobs
         const { results: refJobs } = await c.env.DB.prepare(
           `SELECT description FROM jobs WHERE user_id = ? AND status IN ('ready', 'applied') AND description IS NOT NULL ORDER BY fit_score DESC LIMIT 5`
@@ -742,17 +773,17 @@ jobRoutes.post('/real-search', async (c) => {
         const combinedSim = prefVec ? (resumeSim * 0.6 + prefSim * 0.4) : resumeSim
         return { ...job, _embeddingSim: combinedSim }
       })
-        .filter(job => job._embeddingSim >= 0.25) // drop obvious mismatches
+        .filter(job => job._embeddingSim >= EMBEDDING_THRESHOLD)
         .sort((a, b) => b._embeddingSim - a._embeddingSim)
 
-      console.log(`Embedding pre-filter: ${allJobs.length} jobs passed (threshold 0.25)`)
+      console.log(`Embedding pre-filter: ${allJobs.length} jobs passed (threshold ${EMBEDDING_THRESHOLD}), ${allJobs.map(j => `${j.title}=${j._embeddingSim.toFixed(3)}`).join(', ')}`)
     } catch (e) {
       console.warn('Embedding pre-filter failed, continuing without:', e.message)
     }
   }
 
   if (!allJobs.length) {
-    return c.json({ jobs: [], sources, message: `No semantically relevant jobs found for "${keywords}"` })
+    return c.json({ jobs: [], sources, message: `No semantically relevant jobs found for "${keywords}". Try broader search terms.` })
   }
 
   // Insert into D1 and optionally score top 5
@@ -777,6 +808,22 @@ jobRoutes.post('/real-search', async (c) => {
         status = result.score >= fitThreshold ? 'scored' : 'low_fit'
       } catch (e) {
         console.error(`Scoring failed for job ${job.title}: ${e.message}`)
+        // Fallback: use embedding similarity as a proxy score (0-1 → 0-100)
+        if (job._embeddingSim) {
+          fitScore = Math.round(job._embeddingSim * 100)
+          fitReasoning = JSON.stringify({
+            score: fitScore,
+            verdict: fitScore >= 70 ? 'possible_fit' : 'weak_fit',
+            reasoning: `AI scoring unavailable. Embedding similarity: ${(job._embeddingSim * 100).toFixed(0)}%. Full analysis pending.`,
+            highlights: [],
+            gaps: ['Full AI analysis could not be completed'],
+            deal_breakers: [],
+            salary_match: null,
+            dimensions: null,
+            work_type_detected: 'unknown',
+          })
+          status = fitScore >= fitThreshold ? 'scored' : 'low_fit'
+        }
       }
     }
 

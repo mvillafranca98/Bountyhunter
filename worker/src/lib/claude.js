@@ -217,13 +217,25 @@ ${refs.map((r, i) => `${i + 1}. "${r.title}" at ${r.company} (score: ${r.fit_sco
 Use these reference jobs to calibrate the preference_signal dimension. Jobs similar in role type, industry, company stage, or skill requirements to these references should score higher on preference_signal.`
   }
 
+  // Build a compact resume summary to stay within token limits
+  const compactResume = {
+    summary: (parsedResume.summary || '').slice(0, 500),
+    skills: (parsedResume.skills || []).slice(0, 30),
+    experience: (parsedResume.experience || []).slice(0, 6).map(e => ({
+      title: e.title, company: e.company, duration: e.duration || e.dates,
+      highlights: (e.highlights || e.bullets || []).slice(0, 3).map(h => typeof h === 'string' ? h.slice(0, 150) : h),
+    })),
+    education: (parsedResume.education || []).slice(0, 3),
+    certifications: (parsedResume.certifications || []).slice(0, 5),
+  }
+
   const prompt = `Score this candidate for the job across ${refs.length > 0 ? '11' : '10'} dimensions.
 
 Job Description:
-${jobDescription}
+${jobDescription.slice(0, 3000)}
 
 Candidate Resume:
-${JSON.stringify(parsedResume, null, 2)}
+${JSON.stringify(compactResume, null, 2)}
 
 Candidate Preferences:
 - Salary: ${userPrefs.salary || 'not specified'}
